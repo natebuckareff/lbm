@@ -300,12 +300,16 @@ function stepSimulation() {
           continue;
         }
 
-        if (targetType === EMPTY && cellType === INTERFACE && d !== 0) {
-          const reconstructed =
-            equilibrium(OPP[d], ATMOSPHERIC_RHO, cellUx, cellUy) +
-            equilibrium(d, ATMOSPHERIC_RHO, cellUx, cellUy) -
-            post;
-          fNext[pdfIndex(cell, OPP[d])] += reconstructed;
+        if (targetType === EMPTY) {
+          if (cellType === INTERFACE && d !== 0) {
+            const reconstructed =
+              equilibrium(OPP[d], ATMOSPHERIC_RHO, cellUx, cellUy) +
+              equilibrium(d, ATMOSPHERIC_RHO, cellUx, cellUy) -
+              post;
+            fNext[pdfIndex(cell, OPP[d])] += reconstructed;
+          } else {
+            fNext[pdfIndex(cell, d)] += post;
+          }
           continue;
         }
 
@@ -333,7 +337,7 @@ function stepSimulation() {
 
 function postProcessInterface() {
   const sim = state.sim;
-  const { type, mass, rho, eps, nextType } = sim;
+  const { type, mass, rho, ux, uy, eps, nextType } = sim;
   const fills = [];
   const empties = [];
 
@@ -426,6 +430,12 @@ function postProcessInterface() {
     } else if (type[i] === EMPTY || type[i] === SOLID) {
       mass[i] = 0;
       eps[i] = 0;
+      rho[i] = type[i] === EMPTY ? ATMOSPHERIC_RHO : 0;
+      ux[i] = 0;
+      uy[i] = 0;
+      for (let d = 0; d < Q; d += 1) {
+        sim.f[pdfIndex(i, d)] = 0;
+      }
     }
   }
 }
