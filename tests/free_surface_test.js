@@ -41,6 +41,27 @@ Deno.test("flat pool keeps a single liquid-side interface band", () => {
   }
 });
 
+Deno.test("interface cells with negligible fill do not persist as thin films", () => {
+  const sim = createDefaultScene(64, 40);
+  for (let step = 0; step < 80; step += 1) {
+    stepSimulation(sim, 1 / 0.72, 0.0008, -Math.PI / 3);
+  }
+
+  for (let y = 1; y < sim.height - 1; y += 1) {
+    for (let x = 1; x < sim.width - 1; x += 1) {
+      const cell = x + y * sim.width;
+      if (sim.type[cell] !== INTERFACE) {
+        continue;
+      }
+      const rho = Math.max(sim.rho[cell], ATMOSPHERIC_RHO);
+      const fill = sim.mass[cell] / rho;
+      if (fill < 0.05 && !hasNeighborType(sim.type, sim.width, x, y, FLUID)) {
+        throw new Error(`thin-film interface persisted at ${x},${y} with fill=${fill}`);
+      }
+    }
+  }
+});
+
 Deno.test("drawing fluid does not create liquid mass immediately", () => {
   const sim = createDefaultScene(64, 40);
   const before = liquidMass(sim);
