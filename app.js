@@ -256,7 +256,7 @@ function macroscopicFromDistributions(cell) {
 
 function stepSimulation() {
   const sim = state.sim;
-  const { f, fNext, type, mass, rho, ux, uy, eps, nextType, nx, ny } = sim;
+  const { f, fNext, type, mass, rho, ux, uy, eps, nextType } = sim;
   const { gx, gy } = worldGravityInGrid();
 
   fNext.fill(0);
@@ -316,28 +316,11 @@ function stepSimulation() {
             massDelta += post - f[pdfIndex(target, OPP[d])];
           } else if (targetType === INTERFACE) {
             massDelta += (post - f[pdfIndex(target, OPP[d])]) * 0.5 * (eps[cell] + eps[target]);
-          } else if (targetType === EMPTY) {
-            massDelta -= post;
           }
         }
       }
 
       if (cellType === INTERFACE) {
-        for (let d = 1; d < Q; d += 1) {
-          const tx = x + EX[d];
-          const ty = y + EY[d];
-          const neighbor = idx(tx, ty);
-          const missing = type[neighbor] === EMPTY;
-          const alongNormal = nx[cell] * (-EX[d]) + ny[cell] * (-EY[d]) > 0;
-          if (!missing && !alongNormal) {
-            continue;
-          }
-          fNext[pdfIndex(cell, OPP[d])] =
-            equilibrium(OPP[d], ATMOSPHERIC_RHO, cellUx, cellUy) +
-            equilibrium(d, ATMOSPHERIC_RHO, cellUx, cellUy) -
-            f[pdfIndex(cell, d)];
-        }
-
         mass[cell] = clamp(mass[cell] + massDelta, -ATMOSPHERIC_RHO, 2 * ATMOSPHERIC_RHO);
       }
     }
@@ -364,18 +347,22 @@ function postProcessInterface() {
       const cellRho = Math.max(rho[cell] || ATMOSPHERIC_RHO, 0.0001);
       eps[cell] = clamp(mass[cell] / cellRho, 0, 1);
 
-      if (!hasNeighborType(x, y, EMPTY)) {
+      const hasEmpty = hasNeighborType(x, y, EMPTY);
+      const hasFluid = hasNeighborType(x, y, FLUID);
+      const hasInterface = hasNeighborType(x, y, INTERFACE);
+
+      if (!hasEmpty) {
         fills.push(cell);
         continue;
       }
-      if (!hasNeighborType(x, y, FLUID)) {
+      if (!hasFluid && !hasInterface) {
         empties.push(cell);
         continue;
       }
 
       if (mass[cell] > (1 + FILL_OFFSET) * cellRho) {
         fills.push(cell);
-      } else if (mass[cell] < -FILL_OFFSET * cellRho) {
+      } else if (mass[cell] < -FILL_OFFSET * cellRho && !hasFluid) {
         empties.push(cell);
       }
     }
