@@ -382,22 +382,33 @@ function postProcessInterface() {
   for (const cell of fills) {
     const x = cell % state.width;
     const y = (cell / state.width) | 0;
-    const excessMass = mass[cell] - Math.max(rho[cell], ATMOSPHERIC_RHO);
-    distributeExcessMass(x, y, excessMass, true);
-    mass[cell] = Math.max(rho[cell], ATMOSPHERIC_RHO);
-    eps[cell] = 1;
+    const targetMass = Math.max(rho[cell], 0.0001);
+    let excessMass = Math.max(mass[cell] - targetMass, 0);
+    const emptyNeighbors = [];
 
     for (let d = 1; d < Q; d += 1) {
       const nxCell = idx(x + EX[d], y + EY[d]);
-      if (type[nxCell] !== EMPTY) {
-        continue;
+      if (type[nxCell] === EMPTY) {
+        emptyNeighbors.push(nxCell);
       }
-      nextType[nxCell] = INTERFACE;
-      const avg = averageFluidNeighborhood(x + EX[d], y + EY[d]);
-      mass[nxCell] = 0;
-      eps[nxCell] = 0;
-      setCellToEquilibrium(nxCell, avg.rho, avg.ux, avg.uy);
     }
+
+    if (excessMass > FILL_OFFSET && emptyNeighbors.length > 0) {
+      const seedMass = excessMass / emptyNeighbors.length;
+      for (const nxCell of emptyNeighbors) {
+        nextType[nxCell] = INTERFACE;
+        const avg = averageFluidNeighborhood(nxCell % state.width, (nxCell / state.width) | 0);
+        const clampedSeed = Math.min(seedMass, 0.5 * avg.rho);
+        mass[nxCell] = clampedSeed;
+        eps[nxCell] = clamp(clampedSeed / Math.max(avg.rho, 0.0001), 0, 1);
+        setCellToEquilibrium(nxCell, avg.rho, avg.ux, avg.uy);
+        excessMass -= clampedSeed;
+      }
+    }
+
+    distributeExcessMass(x, y, excessMass, true);
+    mass[cell] = targetMass;
+    eps[cell] = 1;
   }
 
   for (const cell of empties) {
