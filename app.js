@@ -254,12 +254,11 @@ function macroscopicFromDistributions(cell) {
 
 function stepSimulation() {
   const sim = state.sim;
-  const { f, fNext, type, mass, rho, ux, uy, eps, nextType } = sim;
+  const { f, fNext, type, mass, rho, ux, uy, eps } = sim;
   const { gx, gy } = worldGravityInGrid();
-
-  fNext.fill(0);
-  nextType.set(type);
   computeInterfaceNormals();
+
+  const post = new Float32Array(f.length);
 
   for (let y = 1; y < state.height - 1; y += 1) {
     for (let x = 1; x < state.width - 1; x += 1) {
@@ -279,45 +278,63 @@ function stepSimulation() {
       ux[cell] = cellUx;
       uy[cell] = cellUy;
 
-      const cellType = type[cell];
-      let massDelta = 0;
-
       for (let d = 0; d < Q; d += 1) {
         const fi = f[pdfIndex(cell, d)];
         const feq = equilibrium(d, cellRho, cellUx, cellUy);
         const force = forcingTerm(d, cellUx, cellUy, gx, gy);
-        const post = fi - state.omega * (fi - feq) + (1 - 0.5 * state.omega) * force;
+        post[pdfIndex(cell, d)] = fi - state.omega * (fi - feq) + (1 - 0.5 * state.omega) * force;
+      }
+    }
+  }
 
-        const tx = x + EX[d];
-        const ty = y + EY[d];
-        const target = idx(tx, ty);
-        const targetType = type[target];
+  fNext.fill(0);
 
-        if (targetType === SOLID) {
-          fNext[pdfIndex(cell, OPP[d])] += post;
-          continue;
-        }
+  for (let y = 1; y < state.height - 1; y += 1) {
+    for (let x = 1; x < state.width - 1; x += 1) {
+      const cell = idx(x, y);
+      const cellType = type[cell];
+      if (cellType === SOLID) {
+        continue;
+      }
 
-        if (targetType === EMPTY) {
+      if (cellType === EMPTY) {
+        rho[cell] = ATMOSPHERIC_RHO;
+        ux[cell] = 0;
+        uy[cell] = 0;
+        continue;
+      }
+
+      let massDelta = 0;
+
+      for (let d = 0; d < Q; d += 1) {
+        const sx = x - EX[d];
+        const sy = y - EY[d];
+        const source = idx(sx, sy);
+        const sourceType = type[source];
+        let incoming;
+
+        if (sourceType === SOLID) {
+          incoming = post[pdfIndex(cell, OPP[d])];
+        } else if (sourceType === EMPTY) {
           if (cellType === INTERFACE && d !== 0) {
-            const reconstructed =
-              equilibrium(OPP[d], ATMOSPHERIC_RHO, cellUx, cellUy) +
-              equilibrium(d, ATMOSPHERIC_RHO, cellUx, cellUy) -
-              post;
-            fNext[pdfIndex(cell, OPP[d])] += reconstructed;
+            incoming =
+              equilibrium(d, ATMOSPHERIC_RHO, ux[cell], uy[cell]) +
+              equilibrium(OPP[d], ATMOSPHERIC_RHO, ux[cell], uy[cell]) -
+              post[pdfIndex(cell, OPP[d])];
           } else {
-            fNext[pdfIndex(cell, d)] += post;
+            incoming = post[pdfIndex(cell, d)];
           }
-          continue;
+        } else {
+          incoming = post[pdfIndex(source, d)];
         }
 
-        fNext[pdfIndex(target, d)] += post;
+        fNext[pdfIndex(cell, d)] = incoming;
 
         if (cellType === INTERFACE && d !== 0) {
-          if (targetType === FLUID) {
-            massDelta += f[pdfIndex(target, OPP[d])] - post;
-          } else if (targetType === INTERFACE) {
-            massDelta += (f[pdfIndex(target, OPP[d])] - post) * 0.5 * (eps[cell] + eps[target]);
+          if (sourceType === FLUID) {
+            massDelta += incoming - post[pdfIndex(cell, OPP[d])];
+          } else if (sourceType === INTERFACE) {
+            massDelta += (incoming - post[pdfIndex(cell, OPP[d])]) * 0.5 * (eps[cell] + eps[source]);
           }
         }
       }
@@ -329,6 +346,25 @@ function stepSimulation() {
   }
 
   f.set(fNext);
+
+  for (let y = 1; y < state.height - 1; y += 1) {
+    for (let x = 1; x < state.width - 1; x += 1) {
+      const cell = idx(x, y);
+      if (type[cell] === SOLID || type[cell] === EMPTY) {
+        continue;
+      }
+
+      const macro = macroscopicFromDistributions(cell);
+      const cellRho = Math.max(macro.rho, 0.0001);
+      rho[cell] = cellRho;
+      ux[cell] = macro.ux / cellRho + 0.5 * gx / cellRho;
+      uy[cell] = macro.uy / cellRho + 0.5 * gy / cellRho;
+      if (type[cell] === INTERFACE) {
+        eps[cell] = clamp(mass[cell] / cellRho, 0, 1);
+      }
+    }
+  }
+
   postProcessInterface();
   state.stepCount += 1;
 }
@@ -357,7 +393,7 @@ function postProcessInterface() {
         fills.push(cell);
         continue;
       }
-      if (!hasFluid && !hasInterface) {
+      if (!hasFluid) {
         empties.push(cell);
         continue;
       }
@@ -388,7 +424,7 @@ function postProcessInterface() {
 
     for (let d = 1; d < Q; d += 1) {
       const nxCell = idx(x + EX[d], y + EY[d]);
-      if (type[nxCell] === EMPTY) {
+      if (type[nxCell] === EMPTY && hasNeighborType(x + EX[d], y + EY[d], FLUID)) {
         emptyNeighbors.push(nxCell);
       }
     }
@@ -414,7 +450,7 @@ function postProcessInterface() {
   for (const cell of empties) {
     const x = cell % state.width;
     const y = (cell / state.width) | 0;
-    const excessMass = mass[cell];
+    const excessMass = Math.max(mass[cell], 0);
     distributeExcessMass(x, y, excessMass, false);
     mass[cell] = 0;
     eps[cell] = 0;
@@ -436,6 +472,10 @@ function postProcessInterface() {
     if (type[i] === FLUID) {
       mass[i] = Math.max(rho[i], 0.0001);
       eps[i] = 1;
+    } else if (type[i] === INTERFACE) {
+      const cellRho = Math.max(rho[i], ATMOSPHERIC_RHO);
+      mass[i] = clamp(mass[i], 0, cellRho);
+      eps[i] = clamp(mass[i] / cellRho, 0, 1);
     } else if (type[i] === EMPTY || type[i] === SOLID) {
       mass[i] = 0;
       eps[i] = 0;
