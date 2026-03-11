@@ -62,6 +62,27 @@ Deno.test("interface cells with negligible fill do not persist as thin films", (
   }
 });
 
+Deno.test("tilted pool does not grow a tall wall-climbing interface ribbon", () => {
+  const sim = createDefaultScene(64, 40);
+  for (let step = 0; step < 160; step += 1) {
+    stepSimulation(sim, 1 / 0.72, 0.00022, -80 * Math.PI / 180);
+  }
+
+  let highestRightWallInterfaceY = sim.height;
+  const wallX = sim.width - 3;
+  for (let y = 1; y < sim.height - 1; y += 1) {
+    const cell = wallX + y * sim.width;
+    if (sim.type[cell] === INTERFACE) {
+      highestRightWallInterfaceY = Math.min(highestRightWallInterfaceY, y);
+    }
+  }
+
+  const bulkTop = Math.floor(sim.height * 0.64);
+  if (highestRightWallInterfaceY < bulkTop - 6) {
+    throw new Error(`interface ribbon climbed too high on wall: y=${highestRightWallInterfaceY}, bulkTop=${bulkTop}`);
+  }
+});
+
 Deno.test("drawing fluid does not create liquid mass immediately", () => {
   const sim = createDefaultScene(64, 40);
   const before = liquidMass(sim);

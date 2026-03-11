@@ -15,8 +15,8 @@ import { clamp, finiteOr } from "./math.js";
 import { hasNeighborType, idx, pdfIndex } from "./grid.js";
 
 export function worldGravityInGrid(rotation, gravity) {
-  const sin = Math.sin(-rotation);
-  const cos = Math.cos(-rotation);
+  const sin = Math.sin(rotation);
+  const cos = Math.cos(rotation);
   return {
     gx: sin * gravity,
     gy: cos * gravity,
@@ -131,7 +131,8 @@ export function postProcessInterface(sim) {
       }
 
       const cellRho = Math.max(rho[cell] || ATMOSPHERIC_RHO, 0.0001);
-      eps[cell] = clamp(mass[cell] / cellRho, 0, 1);
+      const fill = clamp(mass[cell] / cellRho, 0, 1);
+      eps[cell] = fill;
 
       const hasEmpty = hasNeighborType(type, width, x, y, EMPTY);
       const hasFluid = hasNeighborType(type, width, x, y, FLUID);
@@ -140,7 +141,7 @@ export function postProcessInterface(sim) {
         fills.push(cell);
         continue;
       }
-      if (!hasFluid || mass[cell] < -FILL_OFFSET * cellRho) {
+      if (!hasFluid || fill < 0.05 || mass[cell] < -FILL_OFFSET * cellRho) {
         empties.push(cell);
         emptySet.add(cell);
       }
