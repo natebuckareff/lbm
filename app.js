@@ -181,14 +181,6 @@ function refreshInterfaceLayer() {
         continue;
       }
 
-      if (type[cell] === EMPTY && hasNeighborType(x, y, FLUID)) {
-        nextType[cell] = INTERFACE;
-        eps[cell] = 0;
-        mass[cell] = 0;
-        setCellToEquilibrium(cell, ATMOSPHERIC_RHO, 0, 0);
-        continue;
-      }
-
       nextType[cell] = type[cell];
       if (type[cell] === FLUID) {
         eps[cell] = 1;
@@ -196,6 +188,12 @@ function refreshInterfaceLayer() {
       } else if (type[cell] === EMPTY) {
         eps[cell] = 0;
         mass[cell] = 0;
+        state.sim.rho[cell] = ATMOSPHERIC_RHO;
+        state.sim.ux[cell] = 0;
+        state.sim.uy[cell] = 0;
+        for (let d = 0; d < Q; d += 1) {
+          state.sim.f[pdfIndex(cell, d)] = 0;
+        }
       } else if (type[cell] === INTERFACE) {
         eps[cell] = clamp(mass[cell] / Math.max(state.sim.rho[cell] || ATMOSPHERIC_RHO, 0.0001), 0, 1);
       }
