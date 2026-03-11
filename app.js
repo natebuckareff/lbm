@@ -313,9 +313,9 @@ function stepSimulation() {
 
         if (cellType === INTERFACE && d !== 0) {
           if (targetType === FLUID) {
-            massDelta += post - f[pdfIndex(target, OPP[d])];
+            massDelta += f[pdfIndex(target, OPP[d])] - post;
           } else if (targetType === INTERFACE) {
-            massDelta += (post - f[pdfIndex(target, OPP[d])]) * 0.5 * (eps[cell] + eps[target]);
+            massDelta += (f[pdfIndex(target, OPP[d])] - post) * 0.5 * (eps[cell] + eps[target]);
           }
         }
       }
@@ -421,7 +421,7 @@ function postProcessInterface() {
 
   for (let i = 0; i < type.length; i += 1) {
     if (type[i] === FLUID) {
-      mass[i] = Math.max(rho[i], ATMOSPHERIC_RHO);
+      mass[i] = Math.max(rho[i], 0.0001);
       eps[i] = 1;
     } else if (type[i] === EMPTY || type[i] === SOLID) {
       mass[i] = 0;
