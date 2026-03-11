@@ -80,6 +80,8 @@ function initializeDomain() {
   state.brushSize = Number.parseInt(controls.brushSize.value, 10);
   state.sim = createDefaultScene(width, height);
   state.stepCount = 0;
+  state.pointerCell = null;
+  controls.pauseButton.textContent = state.paused ? "Resume" : "Pause";
 }
 
 function screenToGrid(clientX, clientY) {
@@ -303,6 +305,14 @@ function bindControls() {
   });
 
   canvas.addEventListener("pointermove", handlePointer);
+
+  canvas.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    const nextZoom = clamp(state.zoom + (event.deltaY < 0 ? 0.5 : -0.5), 3, 18);
+    state.zoom = nextZoom;
+    controls.zoom.value = nextZoom.toFixed(1);
+    syncControlDisplays();
+  }, { passive: false });
 
   canvas.addEventListener("pointerup", (event) => {
     state.pointerDown = false;
