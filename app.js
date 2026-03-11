@@ -229,8 +229,8 @@ function createDefaultScene(width, height) {
 }
 
 function worldGravityInGrid(rotation, gravity) {
-  const sin = Math.sin(-rotation);
-  const cos = Math.cos(-rotation);
+  const sin = Math.sin(rotation);
+  const cos = Math.cos(rotation);
   return { gx: sin * gravity, gy: cos * gravity };
 }
 
