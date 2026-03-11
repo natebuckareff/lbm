@@ -1,0 +1,7 @@
+{
+  "tasks": {
+    "dev": "deno run --allow-net --allow-read server.ts",
+    "test": "deno test tests/free_surface_test.js",
+    "check": "deno check app.js tests/free_surface_test.js"
+  }
+}
