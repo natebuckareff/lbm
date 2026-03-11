@@ -204,10 +204,14 @@ function refreshInterfaceLayer() {
 }
 
 function hasNeighborType(x, y, wanted) {
+  return hasNeighborTypeIn(state.sim.type, x, y, wanted);
+}
+
+function hasNeighborTypeIn(types, x, y, wanted) {
   for (let d = 1; d < Q; d += 1) {
     const nx = x + EX[d];
     const ny = y + EY[d];
-    if (state.sim.type[idx(nx, ny)] === wanted) {
+    if (types[idx(nx, ny)] === wanted) {
       return true;
     }
   }
@@ -424,7 +428,7 @@ function postProcessInterface() {
 
     for (let d = 1; d < Q; d += 1) {
       const nxCell = idx(x + EX[d], y + EY[d]);
-      if (type[nxCell] === EMPTY && hasNeighborType(x + EX[d], y + EY[d], FLUID)) {
+      if (nextType[nxCell] === EMPTY && hasNeighborTypeIn(nextType, x + EX[d], y + EY[d], FLUID)) {
         emptyNeighbors.push(nxCell);
       }
     }
@@ -442,7 +446,7 @@ function postProcessInterface() {
       }
     }
 
-    distributeExcessMass(x, y, excessMass, true);
+    distributeExcessMass(x, y, excessMass, true, nextType);
     mass[cell] = targetMass;
     eps[cell] = 1;
   }
@@ -451,13 +455,13 @@ function postProcessInterface() {
     const x = cell % state.width;
     const y = (cell / state.width) | 0;
     const excessMass = Math.max(mass[cell], 0);
-    distributeExcessMass(x, y, excessMass, false);
+    distributeExcessMass(x, y, excessMass, false, nextType);
     mass[cell] = 0;
     eps[cell] = 0;
 
     for (let d = 1; d < Q; d += 1) {
       const nxCell = idx(x + EX[d], y + EY[d]);
-      if (type[nxCell] !== FLUID) {
+      if (nextType[nxCell] !== FLUID) {
         continue;
       }
       nextType[nxCell] = INTERFACE;
@@ -467,6 +471,18 @@ function postProcessInterface() {
   }
 
   type.set(nextType);
+
+  for (let y = 1; y < state.height - 1; y += 1) {
+    for (let x = 1; x < state.width - 1; x += 1) {
+      const cell = idx(x, y);
+      if (type[cell] === FLUID && hasNeighborTypeIn(type, x, y, EMPTY)) {
+        type[cell] = INTERFACE;
+        nextType[cell] = INTERFACE;
+        mass[cell] = clamp(mass[cell], 0, Math.max(rho[cell], ATMOSPHERIC_RHO));
+        eps[cell] = clamp(mass[cell] / Math.max(rho[cell], ATMOSPHERIC_RHO), 0, 1);
+      }
+    }
+  }
 
   for (let i = 0; i < type.length; i += 1) {
     if (type[i] === FLUID) {
@@ -489,7 +505,7 @@ function postProcessInterface() {
   }
 }
 
-function distributeExcessMass(x, y, excessMass, filling) {
+function distributeExcessMass(x, y, excessMass, filling, types = state.sim.type) {
   if (Math.abs(excessMass) < 1e-7) {
     return;
   }
@@ -500,7 +516,7 @@ function distributeExcessMass(x, y, excessMass, filling) {
 
   for (let d = 1; d < Q; d += 1) {
     const nxCell = idx(x + EX[d], y + EY[d]);
-    if (state.sim.type[nxCell] !== INTERFACE) {
+    if (types[nxCell] !== INTERFACE) {
       continue;
     }
 
@@ -515,7 +531,7 @@ function distributeExcessMass(x, y, excessMass, filling) {
   if (total === 0) {
     for (let d = 1; d < Q; d += 1) {
       const nxCell = idx(x + EX[d], y + EY[d]);
-      if (state.sim.type[nxCell] === INTERFACE) {
+      if (types[nxCell] === INTERFACE) {
         weights.push([nxCell, 1]);
         total += 1;
       }
