@@ -198,11 +198,15 @@ function updateStatus() {
   }
 
   const counts = { fluid: 0, interface: 0, solid: 0, empty: 0 };
-  for (const type of state.sim.type) {
+  let liquidMass = 0;
+  for (let i = 0; i < state.sim.type.length; i += 1) {
+    const type = state.sim.type[i];
     if (type === FLUID) {
       counts.fluid += 1;
+      liquidMass += state.sim.rho[i];
     } else if (type === INTERFACE) {
       counts.interface += 1;
+      liquidMass += state.sim.mass[i];
     } else if (type === SOLID) {
       counts.solid += 1;
     } else if (type === EMPTY) {
@@ -216,7 +220,7 @@ function updateStatus() {
   const gy = cos * state.gravity;
   statusBar.textContent =
     `cells ${state.sim.width}x${state.sim.height} | step ${state.stepCount} | fps ${state.fps.toFixed(1)} | ` +
-    `fluid ${counts.fluid} | interface ${counts.interface} | solids ${counts.solid} | ` +
+    `liquid ${liquidMass.toFixed(1)} | fluid ${counts.fluid} | interface ${counts.interface} | solids ${counts.solid} | ` +
     `g_grid (${gx.toFixed(5)}, ${gy.toFixed(5)})`;
 }
 

@@ -137,11 +137,11 @@ export function postProcessInterface(sim) {
       const hasEmpty = hasNeighborType(type, width, x, y, EMPTY);
       const hasFluid = hasNeighborType(type, width, x, y, FLUID);
 
-      if (!hasEmpty || mass[cell] > (1 + FILL_OFFSET) * cellRho) {
+      if (!hasEmpty || mass[cell] > (1 + FILL_OFFSET) * cellRho || (!hasFluid && fill > 0.95)) {
         fills.push(cell);
         continue;
       }
-      if (!hasFluid || fill < 0.05 || mass[cell] < -FILL_OFFSET * cellRho) {
+      if ((!hasFluid && fill < 0.05) || mass[cell] < -FILL_OFFSET * cellRho) {
         empties.push(cell);
         emptySet.add(cell);
       }
@@ -160,23 +160,53 @@ export function postProcessInterface(sim) {
   for (const cell of fills) {
     const x = cell % width;
     const y = (cell / width) | 0;
+    const targetMass = Math.max(rho[cell], 0.0001);
+    let excessMass = Math.max(mass[cell] - targetMass, 0);
+    const emptyNeighbors = [];
+
     for (let d = 1; d < Q; d += 1) {
       const nxCell = idx(sim, x + EX[d], y + EY[d]);
       if (nextType[nxCell] !== EMPTY) {
         continue;
       }
-      nextType[nxCell] = INTERFACE;
-      const avg = averageFluidNeighborhood(sim, x + EX[d], y + EY[d]);
-      mass[nxCell] = 0;
-      rho[nxCell] = Math.max(avg.rho, ATMOSPHERIC_RHO);
-      ux[nxCell] = avg.ux;
-      uy[nxCell] = avg.uy;
-      eps[nxCell] = 0;
-      for (let q = 0; q < Q; q += 1) {
-        sim.f[pdfIndex(nxCell, q)] = equilibrium(q, rho[nxCell], ux[nxCell], uy[nxCell]);
+      const dot = sim.nx[cell] * EX[d] + sim.ny[cell] * EY[d];
+      if (dot > 0) {
+        emptyNeighbors.push(nxCell);
       }
-      emptySet.delete(nxCell);
     }
+
+    if (emptyNeighbors.length === 0) {
+      for (let d = 1; d < Q; d += 1) {
+        const nxCell = idx(sim, x + EX[d], y + EY[d]);
+        if (nextType[nxCell] === EMPTY) {
+          emptyNeighbors.push(nxCell);
+        }
+      }
+    }
+
+    if (excessMass > FILL_OFFSET && emptyNeighbors.length > 0) {
+      const seedMass = excessMass / emptyNeighbors.length;
+      for (const nxCell of emptyNeighbors) {
+        const avg = averageFluidNeighborhood(sim, nxCell % width, (nxCell / width) | 0);
+        const clampedSeed = Math.min(seedMass, 0.5 * Math.max(avg.rho, ATMOSPHERIC_RHO));
+        if (clampedSeed <= FILL_OFFSET) {
+          continue;
+        }
+        nextType[nxCell] = INTERFACE;
+        mass[nxCell] = clampedSeed;
+        rho[nxCell] = Math.max(avg.rho, ATMOSPHERIC_RHO);
+        ux[nxCell] = avg.ux;
+        uy[nxCell] = avg.uy;
+        eps[nxCell] = clamp(mass[nxCell] / rho[nxCell], 0, 1);
+        for (let q = 0; q < Q; q += 1) {
+          sim.f[pdfIndex(nxCell, q)] = equilibrium(q, rho[nxCell], ux[nxCell], uy[nxCell]);
+        }
+        excessMass -= clampedSeed;
+        emptySet.delete(nxCell);
+      }
+    }
+
+    mass[cell] = targetMass + excessMass;
   }
 
   for (const cell of empties) {
@@ -216,14 +246,40 @@ export function postProcessInterface(sim) {
 
   type.set(nextType);
 
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const cell = idx(sim, x, y);
-      if (type[cell] === FLUID && hasNeighborType(type, width, x, y, EMPTY)) {
-        type[cell] = INTERFACE;
-        mass[cell] = clamp(mass[cell], 0, Math.max(rho[cell], ATMOSPHERIC_RHO));
-        eps[cell] = clamp(mass[cell] / Math.max(rho[cell], ATMOSPHERIC_RHO), 0, 1);
+  for (let iter = 0; iter < 4; iter += 1) {
+    let changed = false;
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 1; x < width - 1; x += 1) {
+        const cell = idx(sim, x, y);
+        if (type[cell] === FLUID && hasNeighborType(type, width, x, y, EMPTY)) {
+          type[cell] = INTERFACE;
+          mass[cell] = clamp(mass[cell], 0, Math.max(rho[cell], ATMOSPHERIC_RHO));
+          eps[cell] = clamp(mass[cell] / Math.max(rho[cell], ATMOSPHERIC_RHO), 0, 1);
+          changed = true;
+        } else if (type[cell] === INTERFACE && !hasNeighborType(type, width, x, y, FLUID)) {
+          const cellRho = Math.max(rho[cell], ATMOSPHERIC_RHO);
+          const fill = clamp(mass[cell] / cellRho, 0, 1);
+          if (fill > 0.5) {
+            type[cell] = FLUID;
+            mass[cell] = cellRho;
+            eps[cell] = 1;
+          } else {
+            type[cell] = EMPTY;
+            mass[cell] = 0;
+            eps[cell] = 0;
+            rho[cell] = ATMOSPHERIC_RHO;
+            ux[cell] = 0;
+            uy[cell] = 0;
+            for (let d = 0; d < Q; d += 1) {
+              sim.f[pdfIndex(cell, d)] = 0;
+            }
+          }
+          changed = true;
+        }
       }
+    }
+    if (!changed) {
+      break;
     }
   }
 
@@ -242,6 +298,127 @@ export function postProcessInterface(sim) {
       uy[i] = 0;
       for (let d = 0; d < Q; d += 1) {
         sim.f[pdfIndex(i, d)] = 0;
+      }
+    }
+  }
+
+  removeTinyDetachedComponents(sim);
+}
+
+function removeTinyDetachedComponents(sim) {
+  const { type, mass, rho, eps, width, height } = sim;
+  const visited = new Uint8Array(type.length);
+  const components = [];
+
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const start = idx(sim, x, y);
+      if (visited[start] || (type[start] !== FLUID && type[start] !== INTERFACE)) {
+        continue;
+      }
+
+      const cells = [];
+      let totalMass = 0;
+      visited[start] = 1;
+      const queue = [start];
+
+      for (let qi = 0; qi < queue.length; qi += 1) {
+        const cell = queue[qi];
+        cells.push(cell);
+        totalMass += type[cell] === FLUID ? rho[cell] : mass[cell];
+        const cx = cell % width;
+        const cy = (cell / width) | 0;
+
+        for (let d = 1; d < Q; d += 1) {
+          const nx = cx + EX[d];
+          const ny = cy + EY[d];
+          const neighbor = idx(sim, nx, ny);
+          if (!visited[neighbor] && (type[neighbor] === FLUID || type[neighbor] === INTERFACE)) {
+            visited[neighbor] = 1;
+            queue.push(neighbor);
+          }
+        }
+      }
+
+      let centroidX = 0;
+      let centroidY = 0;
+      for (const cell of cells) {
+        centroidX += cell % width;
+        centroidY += (cell / width) | 0;
+      }
+
+      components.push({
+        cells,
+        totalMass,
+        centroidX: centroidX / cells.length,
+        centroidY: centroidY / cells.length,
+      });
+    }
+  }
+
+  if (components.length <= 1) {
+    return;
+  }
+
+  let largestIndex = 0;
+  for (let i = 1; i < components.length; i += 1) {
+    if (components[i].totalMass > components[largestIndex].totalMass) {
+      largestIndex = i;
+    }
+  }
+
+  const mainComponent = components[largestIndex];
+  const recipientCells = [];
+  for (const cell of mainComponent.cells) {
+    if (type[cell] === INTERFACE) {
+      recipientCells.push(cell);
+    }
+  }
+  if (recipientCells.length === 0) {
+    recipientCells.push(...mainComponent.cells);
+  }
+
+  for (let i = 0; i < components.length; i += 1) {
+    if (i === largestIndex) {
+      continue;
+    }
+    const component = components[i];
+    if (component.totalMass > 20 && component.cells.length > 32) {
+      continue;
+    }
+
+    let recipient = recipientCells[0];
+    let bestDistance = Infinity;
+    for (const cell of recipientCells) {
+      const dx = (cell % width) - component.centroidX;
+      const dy = ((cell / width) | 0) - component.centroidY;
+      const distance = dx * dx + dy * dy;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        recipient = cell;
+      }
+    }
+
+    if (type[recipient] === INTERFACE) {
+      mass[recipient] += component.totalMass;
+      eps[recipient] = clamp(mass[recipient] / Math.max(rho[recipient], ATMOSPHERIC_RHO), 0, 1);
+    } else if (type[recipient] === FLUID) {
+      rho[recipient] += component.totalMass;
+      mass[recipient] = rho[recipient];
+      for (let d = 0; d < Q; d += 1) {
+        sim.f[pdfIndex(recipient, d)] = equilibrium(d, rho[recipient], sim.ux[recipient], sim.uy[recipient]);
+      }
+    }
+
+    for (const cell of component.cells) {
+      type[cell] = EMPTY;
+      mass[cell] = 0;
+      eps[cell] = 0;
+      rho[cell] = ATMOSPHERIC_RHO;
+      sim.ux[cell] = 0;
+      sim.uy[cell] = 0;
+      for (let d = 0; d < Q; d += 1) {
+        sim.f[pdfIndex(cell, d)] = 0;
       }
     }
   }
