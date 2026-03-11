@@ -38,10 +38,10 @@ const controls = {
 const state = {
   tau: 0.72,
   omega: 1 / 0.72,
-  gravity: 0.00022,
-  zoom: 6,
+  gravity: 0.0008,
+  zoom: 4.5,
   rotation: 0,
-  stepsPerFrame: 2,
+  stepsPerFrame: 8,
   brushSize: 3,
   activeTool: "fluid",
   paused: false,
