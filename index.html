@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Free-Surface LBM</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="control-panel">
+      <h1>Free-Surface LBM</h1>
+      <p class="panel-copy">
+        Side-view D2Q9 lattice Boltzmann fluid with free-surface tracking, solid bounce-back boundaries, gravity, zoom, rotation, and paint tools.
+      </p>
+
+      <section class="control-group">
+        <h2>Simulation</h2>
+        <label>
+          Grid width
+          <input id="grid-width" type="number" min="32" max="320" step="1" value="160">
+        </label>
+        <label>
+          Grid height
+          <input id="grid-height" type="number" min="24" max="240" step="1" value="96">
+        </label>
+        <label>
+          Relaxation time
+          <input id="tau" type="range" min="0.52" max="1.8" step="0.01" value="0.72">
+          <span id="tau-value">0.72</span>
+        </label>
+        <label>
+          Gravity strength
+          <input id="gravity" type="range" min="0" max="0.0008" step="0.00002" value="0.00022">
+          <span id="gravity-value">0.00022</span>
+        </label>
+        <label>
+          Steps / frame
+          <input id="steps-per-frame" type="range" min="1" max="8" step="1" value="2">
+          <span id="steps-per-frame-value">2</span>
+        </label>
+        <div class="button-row">
+          <button id="reset-button">Reset Grid</button>
+          <button id="pause-button">Pause</button>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <h2>Brush</h2>
+        <div class="button-row">
+          <button class="tool-button active" data-tool="fluid">Fluid</button>
+          <button class="tool-button" data-tool="solid">Solid</button>
+          <button class="tool-button" data-tool="erase">Erase</button>
+        </div>
+        <label>
+          Brush size
+          <input id="brush-size" type="range" min="1" max="12" step="1" value="3">
+          <span id="brush-size-value">3</span>
+        </label>
+        <p class="hint">Left drag paints. Shift + drag samples through the rotated view accurately.</p>
+      </section>
+
+      <section class="control-group">
+        <h2>View</h2>
+        <label>
+          Zoom
+          <input id="zoom" type="range" min="3" max="18" step="0.5" value="6">
+          <span id="zoom-value">6.0</span>
+        </label>
+        <label>
+          Level rotation
+          <input id="rotation" type="range" min="-180" max="180" step="1" value="0">
+          <span id="rotation-value">0°</span>
+        </label>
+        <p class="hint">The level rotates, but gravity always remains screen-down.</p>
+      </section>
+
+      <section class="control-group legend">
+        <h2>Legend</h2>
+        <div><span class="swatch fluid"></span> Fluid</div>
+        <div><span class="swatch interface"></span> Interface</div>
+        <div><span class="swatch solid"></span> Solid</div>
+        <div><span class="swatch empty"></span> Empty</div>
+      </section>
+    </aside>
+
+    <main class="viewport">
+      <canvas id="sim-canvas" width="1200" height="900"></canvas>
+      <div class="status-bar" id="status-bar"></div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
