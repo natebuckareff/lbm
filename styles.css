@@ -131,6 +131,8 @@ button:hover {
 .viewport {
   position: relative;
   overflow: hidden;
+  height: 100vh;
+  min-height: 100vh;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 18%),
     linear-gradient(135deg, rgba(116, 93, 62, 0.05), rgba(255, 255, 255, 0.02)),
@@ -194,5 +196,10 @@ button:hover {
   .control-panel {
     border-right: 0;
     border-bottom: 1px solid var(--panel-border);
+  }
+
+  .viewport {
+    height: min(70vh, 900px);
+    min-height: 50vh;
   }
 }
