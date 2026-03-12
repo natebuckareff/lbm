@@ -19,19 +19,21 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100vh;
   font-family: var(--font-ui);
   color: var(--text);
   background:
     radial-gradient(circle at top left, rgba(255, 248, 216, 0.8), transparent 32%),
     radial-gradient(circle at bottom right, rgba(201, 122, 51, 0.18), transparent 28%),
     linear-gradient(135deg, #d4c6b1 0%, #eee3d5 50%, #d9ccbb 100%);
+  overflow: hidden;
 }
 
 .app-shell {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .control-panel {
@@ -191,11 +193,13 @@ button:hover {
   .app-shell {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(50vh, 1fr);
+    height: 100vh;
   }
 
   .control-panel {
     border-right: 0;
     border-bottom: 1px solid var(--panel-border);
+    max-height: 42vh;
   }
 
   .viewport {
