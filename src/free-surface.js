@@ -14,8 +14,6 @@ import { equilibrium, forcingTerm } from "./lbm-core.js";
 import { clamp, finiteOr } from "./math.js";
 import { computeInterfaceDistance, computeLiquidMass, hasNeighborType, idx, pdfIndex } from "./grid.js";
 
-const WALL_UNSUPPORTED_MAX_FILL = 0.7;
-
 export function worldGravityInGrid(rotation, gravity) {
   const sin = Math.sin(rotation);
   const cos = Math.cos(rotation);
@@ -78,34 +76,6 @@ export function averageFluidNeighborhood(sim, x, y) {
   };
 }
 
-function countNeighborType(types, width, x, y, wanted) {
-  let count = 0;
-  for (let d = 1; d < Q; d += 1) {
-    const nx = x + EX[d];
-    const ny = y + EY[d];
-    if (types[nx + ny * width] === wanted) {
-      count += 1;
-    }
-  }
-  return count;
-}
-
-function countBulkFluidNeighbors(sim, x, y) {
-  let count = 0;
-  for (let d = 1; d < Q; d += 1) {
-    const nx = x + EX[d];
-    const ny = y + EY[d];
-    const neighbor = idx(sim, nx, ny);
-    if (sim.type[neighbor] !== FLUID) {
-      continue;
-    }
-    if (!hasNeighborType(sim.type, sim.width, nx, ny, SOLID)) {
-      count += 1;
-    }
-  }
-  return count;
-}
-
 export function distributeExcessMass(sim, x, y, excessMass, filling, types = sim.type) {
   if (Math.abs(excessMass) < 1e-7) {
     return;
@@ -166,21 +136,11 @@ export function postProcessInterface(sim) {
 
       const hasEmpty = hasNeighborType(type, width, x, y, EMPTY);
       const hasFluid = hasNeighborType(type, width, x, y, FLUID);
-      const hasSolid = hasNeighborType(type, width, x, y, SOLID);
-      const fluidNeighbors = hasFluid ? countNeighborType(type, width, x, y, FLUID) : 0;
-      const bulkFluidNeighbors = hasFluid ? countBulkFluidNeighbors(sim, x, y) : 0;
-      const wallUnsupported =
-        hasSolid &&
-        hasEmpty &&
-        fluidNeighbors > 0 &&
-        bulkFluidNeighbors === 0 &&
-        fill < WALL_UNSUPPORTED_MAX_FILL;
-
       if (!hasEmpty || mass[cell] > (1 + FILL_OFFSET) * cellRho || (!hasFluid && fill > 0.95)) {
         fills.push(cell);
         continue;
       }
-      if ((!hasFluid && fill < 0.05) || wallUnsupported || mass[cell] < -FILL_OFFSET * cellRho) {
+      if ((!hasFluid && fill < 0.05) || mass[cell] < -FILL_OFFSET * cellRho) {
         empties.push(cell);
         emptySet.add(cell);
       }
