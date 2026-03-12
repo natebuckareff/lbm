@@ -4,6 +4,7 @@ import {
   INTERFACE,
   SOLID,
   createDefaultScene,
+  syncLiquidMassTarget,
   finiteOr,
   idx,
   refreshInterfaceLayer,
@@ -120,6 +121,7 @@ function applyToolAtCell(cx, cy, tool = state.activeTool, refresh = true) {
 
   if (refresh) {
     refreshInterfaceLayer(state.sim);
+    syncLiquidMassTarget(state.sim);
   }
 }
 

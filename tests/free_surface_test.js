@@ -5,6 +5,7 @@ import {
   INTERFACE,
   SOLID,
   createDefaultScene,
+  computeLiquidMass,
   hasNeighborType,
   refreshInterfaceLayer,
   setCellMaterial,
@@ -12,15 +13,7 @@ import {
 } from "../src/index.js";
 
 function liquidMass(sim) {
-  let total = 0;
-  for (let i = 0; i < sim.type.length; i += 1) {
-    if (sim.type[i] === FLUID) {
-      total += sim.rho[i];
-    } else if (sim.type[i] === INTERFACE) {
-      total += sim.mass[i];
-    }
-  }
-  return total;
+  return computeLiquidMass(sim);
 }
 
 function liquidComponents(sim) {
@@ -230,6 +223,18 @@ Deno.test("closed box approximately conserves liquid mass over a few steps", () 
   const after = liquidMass(sim);
   if (Math.abs(after - before) > 150) {
     throw new Error(`liquid mass drift too large: before=${before}, after=${after}`);
+  }
+});
+
+Deno.test("calm pool preserves target liquid mass over long runs", () => {
+  const sim = createDefaultScene(160, 96);
+  const before = liquidMass(sim);
+  for (let step = 0; step < 5000; step += 1) {
+    stepSimulation(sim, 1 / 0.72, 0.0008, 0);
+  }
+  const after = liquidMass(sim);
+  if (Math.abs(after - before) > 0.05) {
+    throw new Error(`long-run liquid mass drift too large: before=${before}, after=${after}`);
   }
 });
 

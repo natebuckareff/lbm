@@ -12,7 +12,7 @@ import {
 } from "./constants.js";
 import { equilibrium, forcingTerm } from "./lbm-core.js";
 import { clamp, finiteOr } from "./math.js";
-import { hasNeighborType, idx, pdfIndex } from "./grid.js";
+import { computeLiquidMass, hasNeighborType, idx, pdfIndex } from "./grid.js";
 
 export function worldGravityInGrid(rotation, gravity) {
   const sin = Math.sin(rotation);
@@ -424,6 +424,97 @@ function removeTinyDetachedComponents(sim) {
   }
 }
 
+function setFluidCellDensity(sim, cell, nextRho) {
+  const rho = Math.max(nextRho, 0.0001);
+  sim.rho[cell] = rho;
+  sim.mass[cell] = rho;
+  for (let d = 0; d < Q; d += 1) {
+    sim.f[pdfIndex(cell, d)] = equilibrium(d, rho, sim.ux[cell], sim.uy[cell]);
+  }
+}
+
+function applyMassConservation(sim) {
+  const targetMass = sim.liquidMassTarget;
+  if (!(targetMass > 0)) {
+    sim.liquidMassTarget = computeLiquidMass(sim);
+    return;
+  }
+
+  const currentMass = computeLiquidMass(sim);
+  let delta = targetMass - currentMass;
+  if (Math.abs(delta) < 1e-6) {
+    return;
+  }
+
+  const interfaceCells = [];
+  const fluidCells = [];
+  for (let i = 0; i < sim.type.length; i += 1) {
+    if (sim.type[i] === INTERFACE) {
+      interfaceCells.push(i);
+    } else if (sim.type[i] === FLUID) {
+      fluidCells.push(i);
+    }
+  }
+
+  const applyDeltaToInterface = (remaining) => {
+    if (interfaceCells.length === 0 || Math.abs(remaining) < 1e-9) {
+      return remaining;
+    }
+
+    const weights = [];
+    let totalWeight = 0;
+    for (const cell of interfaceCells) {
+      const cellRho = Math.max(sim.rho[cell], ATMOSPHERIC_RHO);
+      const weight = remaining >= 0
+        ? Math.max(cellRho - sim.mass[cell], 1e-6)
+        : Math.max(sim.mass[cell], 1e-6);
+      weights.push([cell, weight, cellRho]);
+      totalWeight += weight;
+    }
+
+    let rest = remaining;
+    for (const [cell, weight, cellRho] of weights) {
+      const share = remaining * (weight / totalWeight);
+      const nextMass = clamp(sim.mass[cell] + share, 0, cellRho);
+      const applied = nextMass - sim.mass[cell];
+      sim.mass[cell] = nextMass;
+      sim.eps[cell] = clamp(nextMass / cellRho, 0, 1);
+      rest -= applied;
+    }
+    return rest;
+  };
+
+  const applyDeltaToFluid = (remaining) => {
+    if (fluidCells.length === 0 || Math.abs(remaining) < 1e-9) {
+      return remaining;
+    }
+
+    let totalWeight = 0;
+    const weights = [];
+    for (const cell of fluidCells) {
+      const weight = remaining >= 0 ? Math.max(sim.rho[cell], 1e-6) : Math.max(sim.rho[cell] - 0.0001, 1e-6);
+      weights.push([cell, weight]);
+      totalWeight += weight;
+    }
+
+    let rest = remaining;
+    for (const [cell, weight] of weights) {
+      const share = remaining * (weight / totalWeight);
+      const nextRho = remaining >= 0 ? sim.rho[cell] + share : Math.max(0.0001, sim.rho[cell] + share);
+      const applied = nextRho - sim.rho[cell];
+      setFluidCellDensity(sim, cell, nextRho);
+      rest -= applied;
+    }
+    return rest;
+  };
+
+  delta = applyDeltaToInterface(delta);
+  delta = applyDeltaToFluid(delta);
+  if (Math.abs(delta) > 1e-5) {
+    delta = applyDeltaToInterface(delta);
+  }
+}
+
 export function stepSimulation(sim, omega, gravity, rotation) {
   const { f, fNext, type, mass, rho, ux, uy, eps, width, height } = sim;
   const { gx, gy } = worldGravityInGrid(rotation, gravity);
@@ -544,4 +635,5 @@ export function stepSimulation(sim, omega, gravity, rotation) {
   }
 
   postProcessInterface(sim);
+  applyMassConservation(sim);
 }

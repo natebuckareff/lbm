@@ -18,6 +18,7 @@ export function createSimulation(width, height) {
     eps: new Float32Array(cellCount),
     nx: new Float32Array(cellCount),
     ny: new Float32Array(cellCount),
+    liquidMassTarget: 0,
   };
 }
 
@@ -27,6 +28,22 @@ export function idx(sim, x, y) {
 
 export function pdfIndex(cell, dir) {
   return cell * Q + dir;
+}
+
+export function computeLiquidMass(sim) {
+  let total = 0;
+  for (let i = 0; i < sim.type.length; i += 1) {
+    if (sim.type[i] === FLUID) {
+      total += sim.rho[i];
+    } else if (sim.type[i] === INTERFACE) {
+      total += sim.mass[i];
+    }
+  }
+  return total;
+}
+
+export function syncLiquidMassTarget(sim) {
+  sim.liquidMassTarget = computeLiquidMass(sim);
 }
 
 export function hasNeighborType(types, width, x, y, wanted) {
@@ -160,6 +177,7 @@ export function createDefaultScene(width, height) {
   paintRect(sim, Math.floor(width * 0.48), Math.floor(height * 0.38), Math.floor(width * 0.08), Math.floor(height * 0.32), "solid");
   paintRect(sim, Math.floor(width * 0.68), Math.floor(height * 0.55), Math.floor(width * 0.12), Math.floor(height * 0.1), "fluid");
   refreshInterfaceLayer(sim);
+  syncLiquidMassTarget(sim);
 
   return sim;
 }
