@@ -169,8 +169,7 @@ function draw() {
         ctx.fillStyle = "#57473c";
       } else if (cellType === FLUID) {
         const distance = state.sim.interfaceDistance[cell];
-        const nearSolid = hasNeighborOfType(state.sim, x, y, SOLID);
-        const thin = nearSolid && distance >= 0 && distance <= state.thinness;
+        const thin = distance >= 0 && distance <= state.thinness;
         if (thin) {
           ctx.fillStyle = "#d6453d";
         } else {
@@ -181,8 +180,7 @@ function draw() {
       } else if (cellType === INTERFACE) {
         const fill = clamp(state.sim.eps[cell], 0, 1);
         const distance = state.sim.interfaceDistance[cell];
-        const nearSolid = hasNeighborOfType(state.sim, x, y, SOLID);
-        const thin = nearSolid && distance >= 0 && distance <= state.thinness;
+        const thin = distance >= 0 && distance <= state.thinness;
         if (thin) {
           ctx.fillStyle = "#ff6b57";
         } else {
