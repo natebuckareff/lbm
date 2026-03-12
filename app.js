@@ -32,6 +32,7 @@ const controls = {
   zoom: document.getElementById("zoom"),
   zoomValue: document.getElementById("zoom-value"),
   palette: document.getElementById("palette"),
+  quantity: document.getElementById("quantity"),
   thinness: document.getElementById("thinness"),
   thinnessValue: document.getElementById("thinness-value"),
   rotation: document.getElementById("rotation"),
@@ -47,6 +48,7 @@ const state = {
   gravity: 0.0008,
   zoom: 4.5,
   palette: "speed-heat",
+  quantity: "velocity",
   rotation: 0,
   stepsPerFrame: 8,
   brushSize: 12,
@@ -97,6 +99,7 @@ function initializeDomain() {
   state.stepsPerFrame = Number.parseInt(controls.stepsPerFrame.value, 10);
   state.zoom = Number.parseFloat(controls.zoom.value);
   state.palette = controls.palette.value;
+  state.quantity = controls.quantity.value;
   state.rotation = Number.parseFloat(controls.rotation.value) * Math.PI / 180;
   state.brushSize = Number.parseInt(controls.brushSize.value, 10);
   state.thinness = Number.parseInt(controls.thinness.value, 10);
@@ -275,20 +278,27 @@ function fillViridisPalette(fill) {
   ], fill);
 }
 
-function fluidColorForPalette(palette, speed, rho) {
-  if (palette === "speed-heat") return speedHeatPalette(speed);
-  if (palette === "speed-bands") return speedBandsPalette(speed);
-  if (palette === "density-amber") return densityAmberPalette(rho);
-  if (palette === "fill-viridis") return fillViridisPalette(1);
-  return speedBluePalette(speed);
+function speedScalar(speed) {
+  return clamp(speed / 0.12, 0, 1);
 }
 
-function interfaceColorForPalette(palette, fill, speed, rho) {
-  if (palette === "speed-heat") return speedHeatPalette(speed);
-  if (palette === "speed-bands") return speedBandsPalette(speed);
-  if (palette === "density-amber") return densityAmberPalette(rho);
-  if (palette === "fill-viridis") return fillViridisPalette(fill);
-  return rgb(74 + fill * 28, 150 + fill * 70, 96 + fill * 24);
+function densityScalar(rho) {
+  return clamp((rho - 0.94) / 0.12, 0, 1);
+}
+
+function valueForQuantity(quantity, speed, rho) {
+  if (quantity === "density") {
+    return densityScalar(rho);
+  }
+  return speedScalar(speed);
+}
+
+function colorForPalette(palette, normalizedValue, fallbackBlueValue) {
+  if (palette === "speed-heat") return speedHeatPalette(normalizedValue * 0.12);
+  if (palette === "speed-bands") return speedBandsPalette(normalizedValue * 0.12);
+  if (palette === "density-amber") return densityAmberPalette(0.94 + normalizedValue * 0.12);
+  if (palette === "fill-viridis") return fillViridisPalette(normalizedValue);
+  return speedBluePalette(fallbackBlueValue);
 }
 
 function cellFillStyle(sim, cell) {
@@ -301,14 +311,21 @@ function cellFillStyle(sim, cell) {
   if (cellType === FLUID) {
     if (thin) return "rgba(255, 255, 255, 0.5)";
     const speed = finiteOr(Math.hypot(sim.ux[cell], sim.uy[cell]), 0);
-    return fluidColorForPalette(state.palette, speed, sim.rho[cell]);
+    const normalizedValue = valueForQuantity(state.quantity, speed, sim.rho[cell]);
+    return colorForPalette(state.palette, normalizedValue, speed);
   }
 
   if (cellType === INTERFACE) {
     if (thin) return "rgba(255, 255, 255, 0.5)";
     const fill = clamp(sim.eps[cell], 0, 1);
     const speed = finiteOr(Math.hypot(sim.ux[cell], sim.uy[cell]), 0);
-    return interfaceColorForPalette(state.palette, fill, speed, sim.rho[cell]);
+    const normalizedValue = state.quantity === "density"
+      ? valueForQuantity(state.quantity, speed, sim.rho[cell])
+      : (state.palette === "fill-viridis" ? fill : valueForQuantity(state.quantity, speed, sim.rho[cell]));
+    if (state.quantity === "velocity" && state.palette === "speed-blue") {
+      return rgb(74 + fill * 28, 150 + fill * 70, 96 + fill * 24);
+    }
+    return colorForPalette(state.palette, normalizedValue, speed);
   }
 
   return "#ff00ff";
@@ -438,6 +455,10 @@ function bindControls() {
 
   controls.palette.addEventListener("input", () => {
     state.palette = controls.palette.value;
+  });
+
+  controls.quantity.addEventListener("input", () => {
+    state.quantity = controls.quantity.value;
   });
 
   controls.thinness.addEventListener("input", () => {
