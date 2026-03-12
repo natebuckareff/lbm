@@ -53,6 +53,7 @@ const state = {
   paused: false,
   pointerDown: false,
   pointerCell: null,
+  hoverCell: null,
   stepCount: 0,
   lastFrameTime: performance.now(),
   fps: 0,
@@ -99,6 +100,7 @@ function initializeDomain() {
   state.sim = createDefaultScene(width, height);
   state.stepCount = 0;
   state.pointerCell = null;
+  state.hoverCell = null;
   controls.pauseButton.textContent = state.paused ? "Resume" : "Pause";
 }
 
@@ -224,6 +226,14 @@ function draw() {
   ctx.restore();
 }
 
+function cellTypeLabel(cellType) {
+  if (cellType === SOLID) return "solid";
+  if (cellType === FLUID) return "fluid";
+  if (cellType === INTERFACE) return "interface";
+  if (cellType === EMPTY) return "empty";
+  return "unknown";
+}
+
 function updateStatus() {
   if (!state.sim) {
     statusBar.textContent = "initializing...";
@@ -251,10 +261,25 @@ function updateStatus() {
   const cos = Math.cos(state.rotation);
   const gx = sin * state.gravity;
   const gy = cos * state.gravity;
+  let hoverText = "";
+  if (state.hoverCell) {
+    const { x, y } = state.hoverCell;
+    if (x >= 0 && y >= 0 && x < state.sim.width && y < state.sim.height) {
+      const cell = idx(state.sim, x, y);
+      const speed = finiteOr(Math.hypot(state.sim.ux[cell], state.sim.uy[cell]), 0);
+      hoverText =
+        ` | hover ${x},${y} ${cellTypeLabel(state.sim.type[cell])}` +
+        ` rho ${state.sim.rho[cell].toFixed(3)}` +
+        ` mass ${state.sim.mass[cell].toFixed(3)}` +
+        ` eps ${state.sim.eps[cell].toFixed(3)}` +
+        ` dist ${state.sim.interfaceDistance[cell]}` +
+        ` speed ${speed.toFixed(4)}`;
+    }
+  }
   statusBar.textContent =
     `cells ${state.sim.width}x${state.sim.height} | step ${state.stepCount} | fps ${Math.ceil(state.fps)} | ` +
     `liquid ${liquidMass.toFixed(1)} | fluid ${counts.fluid} | interface ${counts.interface} | solids ${counts.solid} | ` +
-    `g_grid (${gx.toFixed(5)}, ${gy.toFixed(5)})`;
+    `g_grid (${gx.toFixed(5)}, ${gy.toFixed(5)})${hoverText}`;
 }
 
 function frame(now) {
@@ -297,6 +322,7 @@ function handlePointer(event) {
   }
   const cell = screenToGrid(event.clientX, event.clientY);
   state.pointerCell = cell;
+  state.hoverCell = cell;
   if (!state.pointerDown) {
     return;
   }
@@ -376,6 +402,7 @@ function bindControls() {
 
   canvas.addEventListener("pointerleave", () => {
     state.pointerCell = null;
+    state.hoverCell = null;
   });
 
   window.addEventListener("resize", resizeCanvas);
