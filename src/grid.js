@@ -18,6 +18,7 @@ export function createSimulation(width, height) {
     eps: new Float32Array(cellCount),
     nx: new Float32Array(cellCount),
     ny: new Float32Array(cellCount),
+    interfaceDistance: new Int16Array(cellCount),
     liquidMassTarget: 0,
   };
 }
@@ -44,6 +45,43 @@ export function computeLiquidMass(sim) {
 
 export function syncLiquidMassTarget(sim) {
   sim.liquidMassTarget = computeLiquidMass(sim);
+}
+
+export function computeInterfaceDistance(sim, maxDistance = 32) {
+  const { type, interfaceDistance, width, height } = sim;
+  interfaceDistance.fill(-1);
+
+  const queue = [];
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const cell = idx(sim, x, y);
+      if (type[cell] === INTERFACE) {
+        interfaceDistance[cell] = 0;
+        queue.push(cell);
+      }
+    }
+  }
+
+  for (let qi = 0; qi < queue.length; qi += 1) {
+    const cell = queue[qi];
+    const distance = interfaceDistance[cell];
+    if (distance >= maxDistance) {
+      continue;
+    }
+
+    const x = cell % width;
+    const y = (cell / width) | 0;
+    for (let d = 1; d < Q; d += 1) {
+      const nx = x + EX[d];
+      const ny = y + EY[d];
+      const neighbor = nx + ny * width;
+      if (type[neighbor] !== FLUID || interfaceDistance[neighbor] !== -1) {
+        continue;
+      }
+      interfaceDistance[neighbor] = distance + 1;
+      queue.push(neighbor);
+    }
+  }
 }
 
 export function hasNeighborType(types, width, x, y, wanted) {
@@ -177,6 +215,7 @@ export function createDefaultScene(width, height) {
   paintRect(sim, Math.floor(width * 0.48), Math.floor(height * 0.38), Math.floor(width * 0.08), Math.floor(height * 0.32), "solid");
   paintRect(sim, Math.floor(width * 0.68), Math.floor(height * 0.55), Math.floor(width * 0.12), Math.floor(height * 0.1), "fluid");
   refreshInterfaceLayer(sim);
+  computeInterfaceDistance(sim);
   syncLiquidMassTarget(sim);
 
   return sim;

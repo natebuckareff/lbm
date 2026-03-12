@@ -1,5 +1,7 @@
 import {
   EMPTY,
+  EX,
+  EY,
   FLUID,
   INTERFACE,
   SOLID,
@@ -29,6 +31,8 @@ const controls = {
   brushSizeValue: document.getElementById("brush-size-value"),
   zoom: document.getElementById("zoom"),
   zoomValue: document.getElementById("zoom-value"),
+  thinness: document.getElementById("thinness"),
+  thinnessValue: document.getElementById("thinness-value"),
   rotation: document.getElementById("rotation"),
   rotationValue: document.getElementById("rotation-value"),
   resetButton: document.getElementById("reset-button"),
@@ -44,6 +48,7 @@ const state = {
   rotation: 0,
   stepsPerFrame: 8,
   brushSize: 3,
+  thinness: 3,
   activeTool: "fluid",
   paused: false,
   pointerDown: false,
@@ -56,6 +61,17 @@ const state = {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function hasNeighborOfType(sim, x, y, wanted) {
+  for (let d = 1; d < EX.length; d += 1) {
+    const nx = x + EX[d];
+    const ny = y + EY[d];
+    if (sim.type[idx(sim, nx, ny)] === wanted) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function resizeCanvas() {
@@ -79,6 +95,7 @@ function initializeDomain() {
   state.zoom = Number.parseFloat(controls.zoom.value);
   state.rotation = Number.parseFloat(controls.rotation.value) * Math.PI / 180;
   state.brushSize = Number.parseInt(controls.brushSize.value, 10);
+  state.thinness = Number.parseInt(controls.thinness.value, 10);
   state.sim = createDefaultScene(width, height);
   state.stepCount = 0;
   state.pointerCell = null;
@@ -149,15 +166,29 @@ function draw() {
       if (cellType === SOLID) {
         ctx.fillStyle = "#57473c";
       } else if (cellType === FLUID) {
-        const speed = finiteOr(Math.hypot(state.sim.ux[cell], state.sim.uy[cell]), 0);
-        const shade = Math.round(clamp(90 + speed * 2400, 90, 175));
-        ctx.fillStyle = `rgb(46, ${shade}, 188)`;
+        const distance = state.sim.interfaceDistance[cell];
+        const nearSolid = hasNeighborOfType(state.sim, x, y, SOLID);
+        const thin = nearSolid && distance >= 0 && distance <= state.thinness;
+        if (thin) {
+          ctx.fillStyle = "#d6453d";
+        } else {
+          const speed = finiteOr(Math.hypot(state.sim.ux[cell], state.sim.uy[cell]), 0);
+          const shade = Math.round(clamp(90 + speed * 2400, 90, 175));
+          ctx.fillStyle = `rgb(46, ${shade}, 188)`;
+        }
       } else if (cellType === INTERFACE) {
         const fill = clamp(state.sim.eps[cell], 0, 1);
-        const r = Math.floor(97 + fill * 34);
-        const g = Math.floor(174 + fill * 44);
-        const b = Math.floor(199 + fill * 40);
-        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        const distance = state.sim.interfaceDistance[cell];
+        const nearSolid = hasNeighborOfType(state.sim, x, y, SOLID);
+        const thin = nearSolid && distance >= 0 && distance <= state.thinness;
+        if (thin) {
+          ctx.fillStyle = "#ff6b57";
+        } else {
+          const r = Math.floor(74 + fill * 28);
+          const g = Math.floor(150 + fill * 70);
+          const b = Math.floor(96 + fill * 24);
+          ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        }
       } else if (cellType === EMPTY) {
         ctx.fillStyle = "#ddd2c0";
       } else {
@@ -256,6 +287,7 @@ function syncControlDisplays() {
   controls.stepsPerFrameValue.textContent = controls.stepsPerFrame.value;
   controls.brushSizeValue.textContent = controls.brushSize.value;
   controls.zoomValue.textContent = Number.parseFloat(controls.zoom.value).toFixed(1);
+  controls.thinnessValue.textContent = controls.thinness.value;
   controls.rotationValue.textContent = `${controls.rotation.value}\u00b0`;
 }
 
@@ -296,6 +328,11 @@ function bindControls() {
   controls.zoom.addEventListener("input", () => {
     syncControlDisplays();
     state.zoom = Number.parseFloat(controls.zoom.value);
+  });
+
+  controls.thinness.addEventListener("input", () => {
+    syncControlDisplays();
+    state.thinness = Number.parseInt(controls.thinness.value, 10);
   });
 
   controls.rotation.addEventListener("input", () => {
