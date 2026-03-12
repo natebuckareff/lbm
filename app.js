@@ -219,7 +219,7 @@ function updateStatus() {
   const gx = sin * state.gravity;
   const gy = cos * state.gravity;
   statusBar.textContent =
-    `cells ${state.sim.width}x${state.sim.height} | step ${state.stepCount} | fps ${state.fps.toFixed(1)} | ` +
+    `cells ${state.sim.width}x${state.sim.height} | step ${state.stepCount} | fps ${Math.ceil(state.fps)} | ` +
     `liquid ${liquidMass.toFixed(1)} | fluid ${counts.fluid} | interface ${counts.interface} | solids ${counts.solid} | ` +
     `g_grid (${gx.toFixed(5)}, ${gy.toFixed(5)})`;
 }
