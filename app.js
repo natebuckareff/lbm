@@ -41,14 +41,14 @@ const controls = {
 };
 
 const state = {
-  tau: 0.72,
-  omega: 1 / 0.72,
+  tau: 0.5005,
+  omega: 1 / 0.5005,
   gravity: 0.0008,
   zoom: 4.5,
   rotation: 0,
   stepsPerFrame: 8,
-  brushSize: 3,
-  thinness: 3,
+  brushSize: 12,
+  thinness: 0,
   activeTool: "fluid",
   paused: false,
   pointerDown: false,
