@@ -31,6 +31,7 @@ const controls = {
   brushSizeValue: document.getElementById("brush-size-value"),
   zoom: document.getElementById("zoom"),
   zoomValue: document.getElementById("zoom-value"),
+  palette: document.getElementById("palette"),
   thinness: document.getElementById("thinness"),
   thinnessValue: document.getElementById("thinness-value"),
   rotation: document.getElementById("rotation"),
@@ -45,6 +46,7 @@ const state = {
   omega: 1 / 0.5005,
   gravity: 0.0008,
   zoom: 4.5,
+  palette: "speed-heat",
   rotation: 0,
   stepsPerFrame: 8,
   brushSize: 12,
@@ -94,6 +96,7 @@ function initializeDomain() {
   state.gravity = Number.parseFloat(controls.gravity.value);
   state.stepsPerFrame = Number.parseInt(controls.stepsPerFrame.value, 10);
   state.zoom = Number.parseFloat(controls.zoom.value);
+  state.palette = controls.palette.value;
   state.rotation = Number.parseFloat(controls.rotation.value) * Math.PI / 180;
   state.brushSize = Number.parseInt(controls.brushSize.value, 10);
   state.thinness = Number.parseInt(controls.thinness.value, 10);
@@ -164,36 +167,7 @@ function draw() {
   for (let y = 0; y < state.sim.height; y += 1) {
     for (let x = 0; x < state.sim.width; x += 1) {
       const cell = idx(state.sim, x, y);
-      const cellType = state.sim.type[cell];
-      if (cellType === SOLID) {
-        ctx.fillStyle = "#57473c";
-      } else if (cellType === FLUID) {
-        const distance = state.sim.interfaceDistance[cell];
-        const thin = distance >= 0 && distance <= state.thinness;
-        if (thin) {
-          ctx.fillStyle = "#d6453d";
-        } else {
-          const speed = finiteOr(Math.hypot(state.sim.ux[cell], state.sim.uy[cell]), 0);
-          const shade = Math.round(clamp(90 + speed * 2400, 90, 175));
-          ctx.fillStyle = `rgb(46, ${shade}, 188)`;
-        }
-      } else if (cellType === INTERFACE) {
-        const fill = clamp(state.sim.eps[cell], 0, 1);
-        const distance = state.sim.interfaceDistance[cell];
-        const thin = distance >= 0 && distance <= state.thinness;
-        if (thin) {
-          ctx.fillStyle = "#ff6b57";
-        } else {
-          const r = Math.floor(74 + fill * 28);
-          const g = Math.floor(150 + fill * 70);
-          const b = Math.floor(96 + fill * 24);
-          ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-        }
-      } else if (cellType === EMPTY) {
-        ctx.fillStyle = "#ddd2c0";
-      } else {
-        ctx.fillStyle = "#ff00ff";
-      }
+      ctx.fillStyle = cellFillStyle(state.sim, cell);
       ctx.fillRect(x, y, 1, 1);
     }
   }
@@ -230,6 +204,114 @@ function cellTypeLabel(cellType) {
   if (cellType === INTERFACE) return "interface";
   if (cellType === EMPTY) return "empty";
   return "unknown";
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function rgb(r, g, b) {
+  return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+}
+
+function sampleGradient(stops, t) {
+  const u = clamp(t, 0, 1);
+  for (let i = 1; i < stops.length; i += 1) {
+    const left = stops[i - 1];
+    const right = stops[i];
+    if (u <= right.at) {
+      const local = (u - left.at) / Math.max(right.at - left.at, 1e-6);
+      return rgb(
+        lerp(left.color[0], right.color[0], local),
+        lerp(left.color[1], right.color[1], local),
+        lerp(left.color[2], right.color[2], local),
+      );
+    }
+  }
+  const last = stops[stops.length - 1];
+  return rgb(last.color[0], last.color[1], last.color[2]);
+}
+
+function speedBluePalette(speed) {
+  const shade = clamp(90 + speed * 2400, 90, 175);
+  return rgb(46, shade, 188);
+}
+
+function speedHeatPalette(speed) {
+  return sampleGradient([
+    { at: 0, color: [34, 58, 112] },
+    { at: 0.18, color: [52, 156, 196] },
+    { at: 0.4, color: [244, 211, 94] },
+    { at: 0.7, color: [231, 108, 49] },
+    { at: 1, color: [160, 36, 36] },
+  ], clamp(speed / 0.12, 0, 1));
+}
+
+function speedBandsPalette(speed) {
+  const t = clamp(speed / 0.12, 0, 1);
+  if (t < 0.2) return "#1f4b99";
+  if (t < 0.4) return "#2b87c7";
+  if (t < 0.6) return "#3fc8b5";
+  if (t < 0.8) return "#f0c94b";
+  return "#dc6a32";
+}
+
+function densityAmberPalette(rho) {
+  return sampleGradient([
+    { at: 0, color: [94, 54, 24] },
+    { at: 0.4, color: [168, 102, 37] },
+    { at: 0.7, color: [222, 160, 58] },
+    { at: 1, color: [252, 228, 142] },
+  ], clamp((rho - 0.94) / 0.12, 0, 1));
+}
+
+function fillViridisPalette(fill) {
+  return sampleGradient([
+    { at: 0, color: [68, 1, 84] },
+    { at: 0.25, color: [58, 82, 139] },
+    { at: 0.5, color: [32, 144, 140] },
+    { at: 0.75, color: [94, 201, 98] },
+    { at: 1, color: [253, 231, 37] },
+  ], fill);
+}
+
+function fluidColorForPalette(palette, speed, rho) {
+  if (palette === "speed-heat") return speedHeatPalette(speed);
+  if (palette === "speed-bands") return speedBandsPalette(speed);
+  if (palette === "density-amber") return densityAmberPalette(rho);
+  if (palette === "fill-viridis") return fillViridisPalette(1);
+  return speedBluePalette(speed);
+}
+
+function interfaceColorForPalette(palette, fill, speed, rho) {
+  if (palette === "speed-heat") return speedHeatPalette(speed);
+  if (palette === "speed-bands") return speedBandsPalette(speed);
+  if (palette === "density-amber") return densityAmberPalette(rho);
+  if (palette === "fill-viridis") return fillViridisPalette(fill);
+  return rgb(74 + fill * 28, 150 + fill * 70, 96 + fill * 24);
+}
+
+function cellFillStyle(sim, cell) {
+  const cellType = sim.type[cell];
+  if (cellType === SOLID) return "#57473c";
+  if (cellType === EMPTY) return "#ddd2c0";
+
+  const distance = sim.interfaceDistance[cell];
+  const thin = distance >= 0 && distance <= state.thinness;
+  if (cellType === FLUID) {
+    if (thin) return "rgba(255, 255, 255, 0.5)";
+    const speed = finiteOr(Math.hypot(sim.ux[cell], sim.uy[cell]), 0);
+    return fluidColorForPalette(state.palette, speed, sim.rho[cell]);
+  }
+
+  if (cellType === INTERFACE) {
+    if (thin) return "rgba(255, 255, 255, 0.5)";
+    const fill = clamp(sim.eps[cell], 0, 1);
+    const speed = finiteOr(Math.hypot(sim.ux[cell], sim.uy[cell]), 0);
+    return interfaceColorForPalette(state.palette, fill, speed, sim.rho[cell]);
+  }
+
+  return "#ff00ff";
 }
 
 function updateStatus() {
@@ -352,6 +434,10 @@ function bindControls() {
   controls.zoom.addEventListener("input", () => {
     syncControlDisplays();
     state.zoom = Number.parseFloat(controls.zoom.value);
+  });
+
+  controls.palette.addEventListener("input", () => {
+    state.palette = controls.palette.value;
   });
 
   controls.thinness.addEventListener("input", () => {
