@@ -43,8 +43,8 @@ const controls = {
 };
 
 const state = {
-  tau: 0.5005,
-  omega: 1 / 0.5005,
+  tau: 0.51,
+  omega: 1 / 0.51,
   gravity: 0.0008,
   zoom: 4.5,
   palette: "speed-heat",
