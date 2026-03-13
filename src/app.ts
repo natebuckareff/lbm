@@ -1,3 +1,5 @@
+import { animate } from "./animate";
+
 const appRoot = document.querySelector<HTMLDivElement>("#app");
 const shell = document.querySelector<HTMLElement>(".app-shell");
 const sidePanel = document.querySelector<HTMLElement>(".side-panel");
@@ -9,6 +11,10 @@ const inspectorResizeHandle =
 const workspaceView = document.querySelector<HTMLElement>(".workspace-view");
 const canvasStage = document.querySelector<HTMLElement>(".canvas-stage");
 const mainCanvas = document.querySelector<HTMLCanvasElement>(".main-canvas");
+const animationToggleButton =
+  document.querySelector<HTMLButtonElement>(".animation-toggle");
+const viewResetButton =
+  document.querySelector<HTMLButtonElement>(".view-reset");
 
 if (!appRoot) {
   throw new Error("Expected #app mount element");
@@ -23,7 +29,9 @@ if (
   !inspectorResizeHandle ||
   !workspaceView ||
   !canvasStage ||
-  !mainCanvas
+  !mainCanvas ||
+  !animationToggleButton ||
+  !viewResetButton
 ) {
   throw new Error("Expected app layout elements in index.html");
 }
@@ -46,8 +54,32 @@ if (!context) {
 }
 
 context.imageSmoothingEnabled = false;
-context.fillStyle = "#1d4ed8";
-context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+const pixelBytes = new Uint8ClampedArray(CANVAS_WIDTH * CANVAS_HEIGHT * 4);
+const pixelImage = new ImageData(pixelBytes, CANVAS_WIDTH, CANVAS_HEIGHT);
+const animationBuffer = {
+  height: CANVAS_HEIGHT,
+  pixels: pixelBytes,
+  width: CANVAS_WIDTH,
+};
+
+const presentPixels = () => {
+  context.putImageData(pixelImage, 0, 0);
+};
+
+let isAnimationRunning = false;
+let lastFrameTime = performance.now();
+
+const frame = (now: number) => {
+  const dt = (now - lastFrameTime) * 0.001;
+  lastFrameTime = now;
+
+  if (isAnimationRunning) {
+    animate(animationBuffer, dt);
+    presentPixels();
+  }
+  requestAnimationFrame(frame);
+};
 
 let canvasOffsetX = 0;
 let canvasOffsetY = 0;
@@ -74,6 +106,11 @@ const centerCanvasInWorkspace = () => {
   setCanvasTransform(x, y, canvasScale);
 };
 
+const resetCanvasView = () => {
+  canvasScale = 1;
+  centerCanvasInWorkspace();
+};
+
 const setCollapsed = (collapsed: boolean) => {
   shell.classList.toggle("is-collapsed", collapsed);
   panelToggle.setAttribute("aria-expanded", String(!collapsed));
@@ -82,6 +119,15 @@ const setCollapsed = (collapsed: boolean) => {
 
 panelToggle.addEventListener("click", () => {
   setCollapsed(!shell.classList.contains("is-collapsed"));
+});
+
+animationToggleButton.addEventListener("click", () => {
+  isAnimationRunning = !isAnimationRunning;
+  animationToggleButton.textContent = isAnimationRunning ? "Pause" : "Resume";
+});
+
+viewResetButton.addEventListener("click", () => {
+  resetCanvasView();
 });
 
 const COLLAPSED_INSPECTOR_HEIGHT = 24;
@@ -239,4 +285,5 @@ window.addEventListener("resize", () => {
 
 setCollapsed(false);
 setInspectorHeight(COLLAPSED_INSPECTOR_HEIGHT);
-centerCanvasInWorkspace();
+resetCanvasView();
+requestAnimationFrame(frame);

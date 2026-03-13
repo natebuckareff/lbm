@@ -88,6 +88,34 @@ body {
   line-height: 1.35;
 }
 
+.control-group {
+  display: grid;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+
+.side-button {
+  width: 100%;
+  min-height: 24px;
+  border: 1px solid #304255;
+  background: #152233;
+  color: #d9e2ec;
+  padding: 0 0.5rem;
+  font: inherit;
+  font-size: 0.7rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.side-button:hover {
+  background: #1a2a3d;
+}
+
+.side-button:focus-visible {
+  outline: 1px solid #7fb3ff;
+  outline-offset: 1px;
+}
+
 .content-panel {
   position: relative;
   min-height: 100vh;
