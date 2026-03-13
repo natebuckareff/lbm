@@ -24,8 +24,13 @@ export type SimulationConfig = {
 
 export type LatticeFields = {
   currentDistributions: Float32Array;
+  fill: Float32Array;
   flags: Uint8Array;
+  mass: Float32Array;
   nextDistributions: Float32Array;
+  nextFill: Float32Array;
+  nextFlags: Uint8Array;
+  nextMass: Float32Array;
   rho: Float32Array;
   ux: Float32Array;
   uy: Float32Array;

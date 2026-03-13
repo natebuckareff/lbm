@@ -1,13 +1,22 @@
 import {
+  ATMOSPHERIC_DENSITY,
   DEFAULT_TAU,
   DIRECTION_COUNT,
+  INTERFACE_FILL_FRACTION,
   INITIAL_DENSITY,
   INITIAL_VELOCITY_X,
   INITIAL_VELOCITY_Y,
 } from "./constants";
 import { createChunks } from "./chunks";
 import { equilibrium } from "./lattice";
-import { CELL_FLUID, CELL_SOLID, type SimulationConfig, type SimulationState } from "./types";
+import {
+  CELL_EMPTY,
+  CELL_FLUID,
+  CELL_INTERFACE,
+  CELL_SOLID,
+  type SimulationConfig,
+  type SimulationState,
+} from "./types";
 
 const seedObstacle = (flags: Uint8Array, width: number, height: number) => {
   const centerX = Math.floor(width * 0.35);
@@ -46,34 +55,64 @@ export const createSimulationState = (
   const cellCount = width * height;
   const distributionCount = cellCount * DIRECTION_COUNT;
   const flags = new Uint8Array(cellCount);
+  const nextFlags = new Uint8Array(cellCount);
   const currentDistributions = new Float32Array(distributionCount);
   const nextDistributions = new Float32Array(distributionCount);
+  const fill = new Float32Array(cellCount);
+  const nextFill = new Float32Array(cellCount);
+  const mass = new Float32Array(cellCount);
+  const nextMass = new Float32Array(cellCount);
   const rho = new Float32Array(cellCount);
   const ux = new Float32Array(cellCount);
   const uy = new Float32Array(cellCount);
+  const liquidTop = Math.floor(height * 0.5);
 
-  flags.fill(CELL_FLUID);
+  flags.fill(CELL_EMPTY);
   seedBorderWalls(flags, width, height);
   seedObstacle(flags, width, height);
 
   for (let cellIndex = 0; cellIndex < cellCount; cellIndex += 1) {
     const base = cellIndex * DIRECTION_COUNT;
+    const y = Math.floor(cellIndex / width);
 
     if (flags[cellIndex] === CELL_SOLID) {
       rho[cellIndex] = 0;
       ux[cellIndex] = 0;
       uy[cellIndex] = 0;
+      fill[cellIndex] = 0;
+      mass[cellIndex] = 0;
       continue;
     }
 
-    rho[cellIndex] = INITIAL_DENSITY;
+    let density = 0;
+    let cellFill = 0;
+    let cellFlag = CELL_EMPTY;
+
+    if (y > liquidTop) {
+      density = INITIAL_DENSITY;
+      cellFill = 1;
+      cellFlag = CELL_FLUID;
+    } else if (y === liquidTop) {
+      density = ATMOSPHERIC_DENSITY;
+      cellFill = INTERFACE_FILL_FRACTION;
+      cellFlag = CELL_INTERFACE;
+    }
+
+    flags[cellIndex] = cellFlag;
+    rho[cellIndex] = density;
     ux[cellIndex] = INITIAL_VELOCITY_X;
     uy[cellIndex] = INITIAL_VELOCITY_Y;
+    fill[cellIndex] = cellFill;
+    mass[cellIndex] = density * cellFill;
+
+    if (cellFlag === CELL_EMPTY) {
+      continue;
+    }
 
     for (let direction = 0; direction < DIRECTION_COUNT; direction += 1) {
       const value = equilibrium(
         direction,
-        INITIAL_DENSITY,
+        density,
         INITIAL_VELOCITY_X,
         INITIAL_VELOCITY_Y,
       );
@@ -81,6 +120,10 @@ export const createSimulationState = (
       nextDistributions[base + direction] = value;
     }
   }
+
+  nextFlags.set(flags);
+  nextFill.set(fill);
+  nextMass.set(mass);
 
   return {
     domain: {
@@ -90,8 +133,13 @@ export const createSimulationState = (
       chunkSize,
       fields: {
         currentDistributions,
+        fill,
         flags,
+        mass,
         nextDistributions,
+        nextFill,
+        nextFlags,
+        nextMass,
         rho,
         ux,
         uy,

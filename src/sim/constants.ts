@@ -10,8 +10,10 @@ export const DEFAULT_ROTATION_DEGREES = 0;
 export const MIN_ROTATION_DEGREES = -180;
 export const MAX_ROTATION_DEGREES = 180;
 export const INITIAL_DENSITY = 1;
-export const INITIAL_VELOCITY_X = 0.025;
+export const INITIAL_VELOCITY_X = 0;
 export const INITIAL_VELOCITY_Y = 0;
+export const ATMOSPHERIC_DENSITY = 1;
+export const INTERFACE_FILL_FRACTION = 0.5;
 export const STEPS_PER_SECOND = 180;
 export const MAX_STEPS_PER_FRAME = 8;
 

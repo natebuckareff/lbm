@@ -3,7 +3,7 @@ import {
   MAX_STEPS_PER_FRAME,
   STEPS_PER_SECOND,
 } from "./constants";
-import { stepChunk, swapDistributionBuffers } from "./lbm";
+import { stepChunk, swapDistributionBuffers, updateFreeSurface } from "./lbm";
 import { renderState, type VisualizationMode } from "./render";
 import { createSimulationState } from "./state";
 import type { SimulationState } from "./types";
@@ -30,6 +30,7 @@ const iterateSimulation = (state: SimulationState) => {
     stepChunk(state, chunk);
   }
 
+  updateFreeSurface(state);
   swapDistributionBuffers(state);
 };
 

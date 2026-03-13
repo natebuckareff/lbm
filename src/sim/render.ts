@@ -1,6 +1,12 @@
-import { CELL_SOLID, type SimulationState } from "./types";
+import {
+  CELL_EMPTY,
+  CELL_FLUID,
+  CELL_INTERFACE,
+  CELL_SOLID,
+  type SimulationState,
+} from "./types";
 
-export type VisualizationMode = "density" | "speed";
+export type VisualizationMode = "speed" | "surface";
 
 const clampChannel = (value: number) => {
   if (value <= 0) {
@@ -18,23 +24,53 @@ const lerp = (start: number, end: number, amount: number) => {
   return start + (end - start) * amount;
 };
 
-const sampleDensityPalette = (normalizedDensity: number) => {
-  const t = Math.max(0, Math.min(1, normalizedDensity));
+const blendColor = (
+  base: { red: number; green: number; blue: number },
+  target: { red: number; green: number; blue: number },
+  amount: number,
+) => {
+  return {
+    blue: lerp(base.blue, target.blue, amount),
+    green: lerp(base.green, target.green, amount),
+    red: lerp(base.red, target.red, amount),
+  };
+};
 
-  if (t < 0.5) {
-    const localT = t / 0.5;
+const AIR_COLOR = {
+  blue: 232,
+  green: 214,
+  red: 186,
+};
+
+const LIQUID_COLOR = {
+  blue: 178,
+  green: 124,
+  red: 38,
+};
+
+const WALL_COLOR = {
+  blue: 80,
+  green: 74,
+  red: 68,
+};
+
+const sampleSpeedPalette = (normalizedSpeed: number) => {
+  const t = Math.max(0, Math.min(1, normalizedSpeed));
+
+  if (t < 0.4) {
+    const localT = t / 0.4;
     return {
-      blue: lerp(210, 184, localT),
-      green: lerp(56, 172, localT),
-      red: lerp(32, 180, localT),
+      blue: lerp(178, 132, localT),
+      green: lerp(124, 184, localT),
+      red: lerp(38, 68, localT),
     };
   }
 
-  const localT = (t - 0.5) / 0.5;
+  const localT = (t - 0.4) / 0.6;
   return {
-    blue: lerp(184, 44, localT),
-    green: lerp(172, 52, localT),
-    red: lerp(180, 208, localT),
+    blue: lerp(132, 52, localT),
+    green: lerp(184, 214, localT),
+    red: lerp(68, 245, localT),
   };
 };
 
@@ -43,28 +79,45 @@ export const renderState = (
   pixels: Uint8ClampedArray,
   mode: VisualizationMode,
 ) => {
-  const { flags, rho, ux, uy } = state.domain.fields;
+  const { fill, flags, ux, uy } = state.domain.fields;
 
   for (let cellIndex = 0; cellIndex < flags.length; cellIndex += 1) {
     const pixelBase = cellIndex * 4;
+    const flag = flags[cellIndex];
 
-    if (flags[cellIndex] === CELL_SOLID) {
-      pixels[pixelBase] = 238;
-      pixels[pixelBase + 1] = 242;
-      pixels[pixelBase + 2] = 245;
+    if (flag === CELL_SOLID) {
+      pixels[pixelBase] = WALL_COLOR.red;
+      pixels[pixelBase + 1] = WALL_COLOR.green;
+      pixels[pixelBase + 2] = WALL_COLOR.blue;
       pixels[pixelBase + 3] = 255;
       continue;
     }
 
-    const density = rho[cellIndex];
+    if (flag === CELL_EMPTY) {
+      pixels[pixelBase] = AIR_COLOR.red;
+      pixels[pixelBase + 1] = AIR_COLOR.green;
+      pixels[pixelBase + 2] = AIR_COLOR.blue;
+      pixels[pixelBase + 3] = 255;
+      continue;
+    }
+
+    const localFill = flag === CELL_FLUID ? 1 : Math.max(0, Math.min(1, fill[cellIndex]));
+
+    if (mode === "surface") {
+      const color = blendColor(AIR_COLOR, LIQUID_COLOR, localFill);
+      const foam = flag === CELL_INTERFACE ? (1 - localFill) * 42 : 0;
+
+      pixels[pixelBase] = clampChannel(color.red + foam);
+      pixels[pixelBase + 1] = clampChannel(color.green + foam);
+      pixels[pixelBase + 2] = clampChannel(color.blue + foam * 0.7);
+      pixels[pixelBase + 3] = 255;
+      continue;
+    }
+
     const velocityX = ux[cellIndex];
     const velocityY = uy[cellIndex];
 
-    if (
-      !Number.isFinite(density) ||
-      !Number.isFinite(velocityX) ||
-      !Number.isFinite(velocityY)
-    ) {
+    if (!Number.isFinite(velocityX) || !Number.isFinite(velocityY)) {
       pixels[pixelBase] = 255;
       pixels[pixelBase + 1] = 0;
       pixels[pixelBase + 2] = 255;
@@ -73,27 +126,12 @@ export const renderState = (
     }
 
     const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+    const color = sampleSpeedPalette(Math.min(speed * 34, 1));
+    const mixed = blendColor(AIR_COLOR, color, localFill);
 
-    if (mode === "density") {
-      const densityDelta = Math.max(-0.03, Math.min(0.03, density - 1));
-      const normalizedDensity = (densityDelta + 0.03) / 0.06;
-      const palette = sampleDensityPalette(normalizedDensity);
-
-      pixels[pixelBase] = clampChannel(palette.red);
-      pixels[pixelBase + 1] = clampChannel(palette.green);
-      pixels[pixelBase + 2] = clampChannel(palette.blue);
-      pixels[pixelBase + 3] = 255;
-      continue;
-    }
-
-    const densityBias = Math.max(-0.04, Math.min(0.04, density - 1));
-    const normalizedSpeed = Math.min(speed * 28, 1);
-    const palette = sampleDensityPalette(normalizedSpeed);
-    const densityLift = densityBias * 700;
-
-    pixels[pixelBase] = clampChannel(palette.red + densityLift);
-    pixels[pixelBase + 1] = clampChannel(palette.green + densityLift * 0.35);
-    pixels[pixelBase + 2] = clampChannel(palette.blue - densityLift * 0.5);
+    pixels[pixelBase] = clampChannel(mixed.red);
+    pixels[pixelBase + 1] = clampChannel(mixed.green);
+    pixels[pixelBase + 2] = clampChannel(mixed.blue);
     pixels[pixelBase + 3] = 255;
   }
 };
