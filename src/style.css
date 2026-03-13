@@ -144,6 +144,20 @@ body {
   outline-offset: 1px;
 }
 
+.side-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 24px;
+  color: #d9e2ec;
+  font-size: 0.7rem;
+}
+
+.side-checkbox input {
+  margin: 0;
+  accent-color: #7fb3ff;
+}
+
 .content-panel {
   position: relative;
   min-height: 100vh;

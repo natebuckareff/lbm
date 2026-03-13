@@ -1,4 +1,5 @@
 import { animate } from "./animate";
+import { CHUNK_SIZE } from "./sim/constants";
 import type { VisualizationMode } from "./sim/render";
 
 const appRoot = document.querySelector<HTMLDivElement>("#app");
@@ -18,6 +19,8 @@ const viewResetButton =
   document.querySelector<HTMLButtonElement>(".view-reset");
 const visualizationModeSelect =
   document.querySelector<HTMLSelectElement>(".visualization-mode");
+const chunkGridToggle =
+  document.querySelector<HTMLInputElement>(".chunk-grid-toggle");
 
 if (!appRoot) {
   throw new Error("Expected #app mount element");
@@ -35,7 +38,8 @@ if (
   !mainCanvas ||
   !animationToggleButton ||
   !viewResetButton ||
-  !visualizationModeSelect
+  !visualizationModeSelect ||
+  !chunkGridToggle
 ) {
   throw new Error("Expected app layout elements in index.html");
 }
@@ -68,14 +72,39 @@ const animationBuffer = {
   width: CANVAS_WIDTH,
 };
 let visualizationMode: VisualizationMode = "speed";
+let isChunkGridVisible = false;
 
 const presentPixels = () => {
   context.putImageData(pixelImage, 0, 0);
 };
 
+const renderChunkGrid = () => {
+  context.save();
+  context.strokeStyle = "rgba(255, 255, 255, 0.28)";
+  context.lineWidth = 1;
+  context.beginPath();
+
+  for (let x = CHUNK_SIZE; x < CANVAS_WIDTH; x += CHUNK_SIZE) {
+    context.moveTo(x + 0.5, 0);
+    context.lineTo(x + 0.5, CANVAS_HEIGHT);
+  }
+
+  for (let y = CHUNK_SIZE; y < CANVAS_HEIGHT; y += CHUNK_SIZE) {
+    context.moveTo(0, y + 0.5);
+    context.lineTo(CANVAS_WIDTH, y + 0.5);
+  }
+
+  context.stroke();
+  context.restore();
+};
+
 const renderCurrentFrame = (dt: number) => {
   animate(animationBuffer, dt, { visualizationMode });
   presentPixels();
+
+  if (isChunkGridVisible) {
+    renderChunkGrid();
+  }
 };
 
 let isAnimationRunning = false;
@@ -161,6 +190,11 @@ visualizationModeSelect.addEventListener("change", () => {
     visualizationMode = nextMode;
     renderCurrentFrame(0);
   }
+});
+
+chunkGridToggle.addEventListener("change", () => {
+  isChunkGridVisible = chunkGridToggle.checked;
+  renderCurrentFrame(0);
 });
 
 const COLLAPSED_INSPECTOR_HEIGHT = 24;
