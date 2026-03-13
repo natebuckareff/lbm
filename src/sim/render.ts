@@ -6,7 +6,7 @@ import {
   type SimulationState,
 } from "./types";
 
-export type VisualizationMode = "speed" | "surface";
+export type VisualizationMode = "debug" | "speed" | "surface";
 
 const clampChannel = (value: number) => {
   if (value <= 0) {
@@ -52,6 +52,18 @@ const WALL_COLOR = {
   blue: 80,
   green: 74,
   red: 68,
+};
+
+const DEBUG_INTERFACE_LOW = {
+  blue: 248,
+  green: 244,
+  red: 242,
+};
+
+const DEBUG_INTERFACE_HIGH = {
+  blue: 250,
+  green: 189,
+  red: 92,
 };
 
 const sampleSpeedPalette = (normalizedSpeed: number) => {
@@ -102,6 +114,23 @@ export const renderState = (
     }
 
     const localFill = flag === CELL_FLUID ? 1 : Math.max(0, Math.min(1, fill[cellIndex]));
+
+    if (mode === "debug") {
+      if (flag === CELL_FLUID) {
+        pixels[pixelBase] = 24;
+        pixels[pixelBase + 1] = 119;
+        pixels[pixelBase + 2] = 242;
+        pixels[pixelBase + 3] = 255;
+        continue;
+      }
+
+      const color = blendColor(DEBUG_INTERFACE_LOW, DEBUG_INTERFACE_HIGH, localFill);
+      pixels[pixelBase] = clampChannel(color.red);
+      pixels[pixelBase + 1] = clampChannel(color.green);
+      pixels[pixelBase + 2] = clampChannel(color.blue);
+      pixels[pixelBase + 3] = 255;
+      continue;
+    }
 
     if (mode === "surface") {
       const color = blendColor(AIR_COLOR, LIQUID_COLOR, localFill);

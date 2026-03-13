@@ -210,7 +210,7 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  transform-origin: center center;
+  transform-origin: top left;
   will-change: transform;
 }
 

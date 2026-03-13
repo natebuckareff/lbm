@@ -56,3 +56,22 @@ export const animate = (
     options.rotationRadians,
   );
 };
+
+export const stepAnimation = (
+  buffer: AnimationBuffer,
+  options: AnimationOptions,
+) => {
+  ensureSimulation(buffer);
+
+  if (simulation === null) {
+    throw new Error("Expected simulation to be initialized");
+  }
+
+  simulation.stepOnce(
+    buffer.pixels,
+    options.visualizationMode,
+    options.tau,
+    options.gravityMagnitude,
+    options.rotationRadians,
+  );
+};

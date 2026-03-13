@@ -1,4 +1,4 @@
-import { animate, resetSimulation } from "./animate";
+import { animate, resetSimulation, stepAnimation } from "./animate";
 import {
   CHUNK_SIZE,
   DEFAULT_GRAVITY,
@@ -26,6 +26,8 @@ const canvasStage = document.querySelector<HTMLElement>(".canvas-stage");
 const mainCanvas = document.querySelector<HTMLCanvasElement>(".main-canvas");
 const animationToggleButton =
   document.querySelector<HTMLButtonElement>(".animation-toggle");
+const simulationStepButton =
+  document.querySelector<HTMLButtonElement>(".simulation-step");
 const simulationResetButton =
   document.querySelector<HTMLButtonElement>(".simulation-reset");
 const viewResetButton =
@@ -60,6 +62,7 @@ if (
   !canvasStage ||
   !mainCanvas ||
   !animationToggleButton ||
+  !simulationStepButton ||
   !simulationResetButton ||
   !viewResetButton ||
   !gridWidthInput ||
@@ -202,6 +205,20 @@ const applyPendingGridSize = () => {
   resetCanvasView();
 };
 
+const stepCurrentFrame = () => {
+  stepAnimation(animationBuffer, {
+    gravityMagnitude,
+    rotationRadians: (rotationDegrees * Math.PI) / 180,
+    tau,
+    visualizationMode,
+  });
+  presentPixels();
+
+  if (isChunkGridVisible) {
+    renderChunkGrid();
+  }
+};
+
 let isAnimationRunning = true;
 let lastFrameTime = performance.now();
 
@@ -237,9 +254,53 @@ const getRotatedCanvasBounds = (scale: number) => {
   };
 };
 
+const getTransformedCanvasMetrics = (scale: number) => {
+  const angle = getViewRotationRadians();
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const centerX = gridWidth * 0.5;
+  const centerY = gridHeight * 0.5;
+  const corners = [
+    { x: 0, y: 0 },
+    { x: gridWidth, y: 0 },
+    { x: 0, y: gridHeight },
+    { x: gridWidth, y: gridHeight },
+  ];
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const corner of corners) {
+    const localX = (corner.x - centerX) * scale;
+    const localY = (corner.y - centerY) * scale;
+    const rotatedX = localX * cos - localY * sin + centerX;
+    const rotatedY = localX * sin + localY * cos + centerY;
+
+    minX = Math.min(minX, rotatedX);
+    minY = Math.min(minY, rotatedY);
+    maxX = Math.max(maxX, rotatedX);
+    maxY = Math.max(maxY, rotatedY);
+  }
+
+  return {
+    height: maxY - minY,
+    minX,
+    minY,
+    width: maxX - minX,
+  };
+};
+
 const renderCanvasTransform = () => {
+  const centerX = gridWidth * 0.5;
+  const centerY = gridHeight * 0.5;
   canvasStage.style.transform =
-    `translate(${canvasOffsetX}px, ${canvasOffsetY}px) rotate(${rotationDegrees}deg) scale(${canvasScale})`;
+    `translate(${canvasOffsetX}px, ${canvasOffsetY}px) ` +
+    `translate(${centerX}px, ${centerY}px) ` +
+    `rotate(${rotationDegrees}deg) ` +
+    `scale(${canvasScale}) ` +
+    `translate(${-centerX}px, ${-centerY}px)`;
 };
 
 const setCanvasTransform = (x: number, y: number, scale: number) => {
@@ -254,11 +315,9 @@ const clampCanvasScale = (scale: number) => {
 };
 
 const centerCanvasInWorkspace = (scale: number) => {
-  const rotatedBounds = getRotatedCanvasBounds(scale);
-  const x = (workspaceView.clientWidth - rotatedBounds.width) * 0.5 +
-    (rotatedBounds.width - gridWidth * scale) * 0.5;
-  const y = (workspaceView.clientHeight - rotatedBounds.height) * 0.5 +
-    (rotatedBounds.height - gridHeight * scale) * 0.5;
+  const transformedMetrics = getTransformedCanvasMetrics(scale);
+  const x = (workspaceView.clientWidth - transformedMetrics.width) * 0.5 - transformedMetrics.minX;
+  const y = (workspaceView.clientHeight - transformedMetrics.height) * 0.5 - transformedMetrics.minY;
   setCanvasTransform(x, y, scale);
 };
 
@@ -295,6 +354,15 @@ animationToggleButton.addEventListener("click", () => {
   animationToggleButton.textContent = isAnimationRunning ? "Pause" : "Resume";
 });
 
+simulationStepButton.addEventListener("click", () => {
+  if (isAnimationRunning) {
+    isAnimationRunning = false;
+    animationToggleButton.textContent = "Resume";
+  }
+
+  stepCurrentFrame();
+});
+
 simulationResetButton.addEventListener("click", () => {
   applyPendingGridSize();
 });
@@ -306,7 +374,7 @@ viewResetButton.addEventListener("click", () => {
 visualizationModeSelect.addEventListener("change", () => {
   const nextMode = visualizationModeSelect.value;
 
-  if (nextMode === "surface" || nextMode === "speed") {
+  if (nextMode === "surface" || nextMode === "speed" || nextMode === "debug") {
     visualizationMode = nextMode;
     renderCurrentFrame(0);
   }
