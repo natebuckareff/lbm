@@ -404,10 +404,16 @@ const createInterfaceCell = (
     return;
   }
 
+  if (fields.nextFlags[cellIndex] === CELL_INTERFACE) {
+    fields.nextFill[cellIndex] = Math.max(
+      fields.nextFill[cellIndex],
+      clamp(fill, 0, FILLED_THRESHOLD),
+    );
+    return;
+  }
+
   fields.nextFlags[cellIndex] = CELL_INTERFACE;
-  fields.nextFill[cellIndex] = clamp(fill, EMPTY_THRESHOLD, FILLED_THRESHOLD);
-  fields.nextMass[cellIndex] =
-    Math.max(fields.nextMass[cellIndex], ATMOSPHERIC_DENSITY * fields.nextFill[cellIndex]);
+  fields.nextFill[cellIndex] = clamp(fill, 0, FILLED_THRESHOLD);
 };
 
 const classifyInterfaceCells = (state: SimulationState) => {
@@ -579,7 +585,6 @@ const enforceInterfaceShell = (state: SimulationState) => {
         continue;
       }
 
-      let hasFluidNeighbor = false;
       let hasEmptyNeighbor = false;
 
       for (let direction = 1; direction < DIRECTION_COUNT; direction += 1) {
@@ -587,22 +592,19 @@ const enforceInterfaceShell = (state: SimulationState) => {
           (y + DIRECTIONS_Y[direction]) * width + (x + DIRECTIONS_X[direction]);
         const neighborFlag = fields.nextFlags[neighborIndex];
 
-        if (neighborFlag === CELL_FLUID) {
-          hasFluidNeighbor = true;
-        } else if (neighborFlag === CELL_EMPTY) {
+        if (neighborFlag === CELL_EMPTY) {
           hasEmptyNeighbor = true;
         }
       }
 
       if (nextFlag === CELL_FLUID && hasEmptyNeighbor) {
         fields.nextFlags[cellIndex] = CELL_INTERFACE;
+        fields.nextMass[cellIndex] = Math.max(fields.nextMass[cellIndex], fields.rho[cellIndex]);
         fields.nextFill[cellIndex] = clamp(
           fields.nextMass[cellIndex] / Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY),
           EMPTY_THRESHOLD,
           FILLED_THRESHOLD,
         );
-      } else if (nextFlag === CELL_EMPTY && hasFluidNeighbor) {
-        createInterfaceCell(fields, cellIndex, NEW_INTERFACE_FILL);
       }
     }
   }
@@ -662,20 +664,22 @@ const materializeCellStates = (state: SimulationState) => {
         continue;
       }
 
+      let density = Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY);
+
       if (previousFlag === CELL_EMPTY) {
         const neighborState = averageNeighborState(fields, width, height, x, y);
+        density = Math.max(neighborState.density, ATMOSPHERIC_DENSITY);
         seedEquilibriumCell(
           fields,
           cellIndex,
-          Math.max(neighborState.density, ATMOSPHERIC_DENSITY),
+          density,
           neighborState.velocityX,
           neighborState.velocityY,
         );
       }
 
-      const density = Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY);
-      fields.fill[cellIndex] = clamp(fields.nextFill[cellIndex], EMPTY_THRESHOLD, FILLED_THRESHOLD);
       fields.mass[cellIndex] = clamp(fields.nextMass[cellIndex], 0, density);
+      fields.fill[cellIndex] = clamp(fields.mass[cellIndex] / density, 0, FILLED_THRESHOLD);
     }
   }
 };
