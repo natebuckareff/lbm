@@ -72,8 +72,7 @@ export type PhaseName =
   | "stream"
   | "mass"
   | "post"
-  | "conservation"
-  | "cleanup";
+  | "conservation";
 
 export type PhaseDiagnostics = {
   changedCells: number;
