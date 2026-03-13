@@ -680,7 +680,7 @@ const postProcessInterface = (state: SimulationState) => {
 
       if (
         fields.mass[cellIndex] > (1 + FILL_OFFSET) * density ||
-        (!hasEmpty && strongLiquidSupport && !zebraCandidate && fill > MAX_FILL)
+        (!hasEmpty && hasFluid && !zebraCandidate)
       ) {
         fills.push(cellIndex);
         continue;
@@ -871,10 +871,10 @@ const postProcessInterface = (state: SimulationState) => {
         }
 
         if (!neighborStats.touchesEmpty) {
-          if (strongLiquidSupport && fill > MAX_FILL) {
+          if (neighborStats.touchesFluid) {
             setCellToFluid(state, cellIndex);
           } else {
-            setCellToInterface(state, cellIndex);
+            setCellToEmpty(state, cellIndex);
           }
           changed = true;
         }
