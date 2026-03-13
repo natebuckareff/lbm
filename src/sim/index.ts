@@ -17,6 +17,9 @@ import {
   type SimulationState,
 } from "./types";
 
+const SIMULATION_DT_SECONDS = 1 / STEPS_PER_SECOND;
+const MAX_FRAME_TIME_SECONDS = 0.25;
+
 export type FrameBuffer = {
   height: number;
   pixels: Uint8ClampedArray;
@@ -29,6 +32,7 @@ export type Simulation = {
     dt: number,
     pixels: Uint8ClampedArray,
     mode: VisualizationMode,
+    interpolationEnabled: boolean,
     tau: number,
     gravityMagnitude: number,
     rotationRadians: number,
@@ -36,19 +40,42 @@ export type Simulation = {
   stepOnce: (
     pixels: Uint8ClampedArray,
     mode: VisualizationMode,
+    interpolationEnabled: boolean,
     tau: number,
     gravityMagnitude: number,
     rotationRadians: number,
   ) => void;
 };
 
-const iterateSimulation = (state: SimulationState) => {
+const capturePreviousRenderFields = (state: SimulationState) => {
+  const { fields } = state.domain;
+  fields.previousFill.set(fields.fill);
+  fields.previousRho.set(fields.rho);
+  fields.previousUx.set(fields.ux);
+  fields.previousUy.set(fields.uy);
+};
+
+const advanceOneFixedStep = (state: SimulationState) => {
+  capturePreviousRenderFields(state);
+
   for (const chunk of state.domain.chunks) {
     stepChunk(state, chunk);
   }
 
   updateFreeSurface(state);
   swapDistributionBuffers(state);
+};
+
+const renderSimulation = (
+  state: SimulationState,
+  pixels: Uint8ClampedArray,
+  mode: VisualizationMode,
+  interpolationEnabled: boolean,
+) => {
+  renderState(state, pixels, mode, {
+    interpolationAlpha: state.runtime.accumulatorSeconds / SIMULATION_DT_SECONDS,
+    interpolationEnabled,
+  });
 };
 
 const inspectCell = (
@@ -157,27 +184,33 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
     inspectCell(x, y) {
       return inspectCell(state, x, y);
     },
-    step(dt, pixels, mode, tau, gravityMagnitude, rotationRadians) {
+    step(dt, pixels, mode, interpolationEnabled, tau, gravityMagnitude, rotationRadians) {
       state.runtime.tau = tau;
       state.runtime.gravityX = gravityMagnitude * Math.sin(rotationRadians);
       state.runtime.gravityY = gravityMagnitude * Math.cos(rotationRadians);
-      state.runtime.accumulator += dt * STEPS_PER_SECOND;
+      state.runtime.accumulatorSeconds += Math.min(
+        Math.max(dt, 0),
+        MAX_FRAME_TIME_SECONDS,
+      );
 
       let steps = 0;
-      while (state.runtime.accumulator >= 1 && steps < MAX_STEPS_PER_FRAME) {
-        iterateSimulation(state);
-        state.runtime.accumulator -= 1;
+      while (
+        state.runtime.accumulatorSeconds >= SIMULATION_DT_SECONDS &&
+        steps < MAX_STEPS_PER_FRAME
+      ) {
+        advanceOneFixedStep(state);
+        state.runtime.accumulatorSeconds -= SIMULATION_DT_SECONDS;
         steps += 1;
       }
 
-      renderState(state, pixels, mode);
+      renderSimulation(state, pixels, mode, interpolationEnabled);
     },
-    stepOnce(pixels, mode, tau, gravityMagnitude, rotationRadians) {
+    stepOnce(pixels, mode, interpolationEnabled, tau, gravityMagnitude, rotationRadians) {
       state.runtime.tau = tau;
       state.runtime.gravityX = gravityMagnitude * Math.sin(rotationRadians);
       state.runtime.gravityY = gravityMagnitude * Math.cos(rotationRadians);
-      iterateSimulation(state);
-      renderState(state, pixels, mode);
+      advanceOneFixedStep(state);
+      renderSimulation(state, pixels, mode, interpolationEnabled);
     },
   };
 };

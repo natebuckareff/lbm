@@ -10,6 +10,7 @@ export type AnimationBuffer = {
 
 export type AnimationOptions = {
   gravityMagnitude: number;
+  interpolationEnabled: boolean;
   rotationRadians: number;
   tau: number;
   visualizationMode: VisualizationMode;
@@ -52,6 +53,7 @@ export const animate = (
     dt,
     buffer.pixels,
     options.visualizationMode,
+    options.interpolationEnabled,
     options.tau,
     options.gravityMagnitude,
     options.rotationRadians,
@@ -71,6 +73,7 @@ export const stepAnimation = (
   simulation.stepOnce(
     buffer.pixels,
     options.visualizationMode,
+    options.interpolationEnabled,
     options.tau,
     options.gravityMagnitude,
     options.rotationRadians,

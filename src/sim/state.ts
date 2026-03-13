@@ -65,6 +65,10 @@ export const createSimulationState = (
   const nextMass = new Float32Array(cellCount);
   const normalX = new Float32Array(cellCount);
   const normalY = new Float32Array(cellCount);
+  const previousFill = new Float32Array(cellCount);
+  const previousRho = new Float32Array(cellCount);
+  const previousUx = new Float32Array(cellCount);
+  const previousUy = new Float32Array(cellCount);
   const debugPreviousFlags = new Uint8Array(cellCount);
   const debugPreviousMass = new Float32Array(cellCount);
   const debugPreviousFill = new Float32Array(cellCount);
@@ -132,6 +136,10 @@ export const createSimulationState = (
   nextFlags.set(flags);
   nextFill.set(fill);
   nextMass.set(mass);
+  previousFill.set(fill);
+  previousRho.set(rho);
+  previousUx.set(ux);
+  previousUy.set(uy);
   debugPreviousFlags.set(flags);
   debugPreviousMass.set(mass);
   debugPreviousFill.set(fill);
@@ -155,6 +163,10 @@ export const createSimulationState = (
         nextFlags,
         nextMass,
         postDistributions,
+        previousFill,
+        previousRho,
+        previousUx,
+        previousUy,
         rho,
         ux,
         uy,
@@ -163,7 +175,7 @@ export const createSimulationState = (
       width,
     },
     runtime: {
-      accumulator: 0,
+      accumulatorSeconds: 0,
       debugPreviousFill,
       debugPreviousFlags,
       debugPreviousMass,

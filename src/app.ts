@@ -53,6 +53,8 @@ const rotationSlider = document.querySelector<HTMLInputElement>(".rotation-slide
 const rotationValue = document.querySelector<HTMLElement>(".rotation-value");
 const chunkGridToggle =
   document.querySelector<HTMLInputElement>(".chunk-grid-toggle");
+const interpolationToggle =
+  document.querySelector<HTMLInputElement>(".interpolation-toggle");
 
 if (!appRoot) {
   throw new Error("Expected #app mount element");
@@ -82,7 +84,8 @@ if (
   !gravityValue ||
   !rotationSlider ||
   !rotationValue ||
-  !chunkGridToggle
+  !chunkGridToggle ||
+  !interpolationToggle
 ) {
   throw new Error("Expected app layout elements in index.html");
 }
@@ -124,6 +127,7 @@ let tau = DEFAULT_TAU;
 let gravityMagnitude = DEFAULT_GRAVITY;
 let rotationDegrees = DEFAULT_ROTATION_DEGREES;
 let isChunkGridVisible = false;
+let isInterpolationEnabled = false;
 let hoveredCellX = -1;
 let hoveredCellY = -1;
 
@@ -310,6 +314,7 @@ const renderChunkGrid = () => {
 const renderCurrentFrame = (dt: number) => {
   animate(animationBuffer, dt, {
     gravityMagnitude,
+    interpolationEnabled: isInterpolationEnabled,
     rotationRadians: (rotationDegrees * Math.PI) / 180,
     tau,
     visualizationMode,
@@ -339,6 +344,7 @@ const applyPendingGridSize = () => {
 const stepCurrentFrame = () => {
   stepAnimation(animationBuffer, {
     gravityMagnitude,
+    interpolationEnabled: isInterpolationEnabled,
     rotationRadians: (rotationDegrees * Math.PI) / 180,
     tau,
     visualizationMode,
@@ -602,6 +608,11 @@ rotationSlider.addEventListener("input", () => {
 
 chunkGridToggle.addEventListener("change", () => {
   isChunkGridVisible = chunkGridToggle.checked;
+  renderCurrentFrame(0);
+});
+
+interpolationToggle.addEventListener("change", () => {
+  isInterpolationEnabled = interpolationToggle.checked;
   renderCurrentFrame(0);
 });
 

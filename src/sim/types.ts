@@ -34,6 +34,10 @@ export type LatticeFields = {
   nextFlags: Uint8Array;
   nextMass: Float32Array;
   postDistributions: Float32Array;
+  previousFill: Float32Array;
+  previousRho: Float32Array;
+  previousUx: Float32Array;
+  previousUy: Float32Array;
   rho: Float32Array;
   ux: Float32Array;
   uy: Float32Array;
@@ -50,7 +54,7 @@ export type SimulationDomain = {
 };
 
 export type SimulationRuntime = {
-  accumulator: number;
+  accumulatorSeconds: number;
   debugPreviousFill: Float32Array;
   debugPreviousFlags: Uint8Array;
   debugPreviousMass: Float32Array;

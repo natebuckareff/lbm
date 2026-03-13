@@ -8,6 +8,11 @@ import {
 
 export type VisualizationMode = "debug" | "speed" | "surface";
 
+export type RenderOptions = {
+  interpolationAlpha: number;
+  interpolationEnabled: boolean;
+};
+
 const clampChannel = (value: number) => {
   if (value <= 0) {
     return 0;
@@ -90,8 +95,18 @@ export const renderState = (
   state: SimulationState,
   pixels: Uint8ClampedArray,
   mode: VisualizationMode,
+  options: RenderOptions,
 ) => {
-  const { fill, flags, ux, uy } = state.domain.fields;
+  const {
+    fill,
+    flags,
+    previousFill,
+    previousUx,
+    previousUy,
+    ux,
+    uy,
+  } = state.domain.fields;
+  const alpha = Math.max(0, Math.min(1, options.interpolationAlpha));
 
   for (let cellIndex = 0; cellIndex < flags.length; cellIndex += 1) {
     const pixelBase = cellIndex * 4;
@@ -113,7 +128,13 @@ export const renderState = (
       continue;
     }
 
-    const localFill = flag === CELL_FLUID ? 1 : Math.max(0, Math.min(1, fill[cellIndex]));
+    const currentFill = flag === CELL_FLUID ? 1 : Math.max(0, Math.min(1, fill[cellIndex]));
+    const interpolatedFill = options.interpolationEnabled
+      ? Math.max(
+        0,
+        Math.min(1, lerp(previousFill[cellIndex], currentFill, alpha)),
+      )
+      : currentFill;
 
     if (mode === "debug") {
       if (flag === CELL_FLUID) {
@@ -124,7 +145,7 @@ export const renderState = (
         continue;
       }
 
-      const color = blendColor(DEBUG_INTERFACE_LOW, DEBUG_INTERFACE_HIGH, localFill);
+      const color = blendColor(DEBUG_INTERFACE_LOW, DEBUG_INTERFACE_HIGH, interpolatedFill);
       pixels[pixelBase] = clampChannel(color.red);
       pixels[pixelBase + 1] = clampChannel(color.green);
       pixels[pixelBase + 2] = clampChannel(color.blue);
@@ -133,8 +154,8 @@ export const renderState = (
     }
 
     if (mode === "surface") {
-      const color = blendColor(AIR_COLOR, LIQUID_COLOR, localFill);
-      const foam = flag === CELL_INTERFACE ? (1 - localFill) * 42 : 0;
+      const color = blendColor(AIR_COLOR, LIQUID_COLOR, interpolatedFill);
+      const foam = flag === CELL_INTERFACE ? (1 - interpolatedFill) * 42 : 0;
 
       pixels[pixelBase] = clampChannel(color.red + foam);
       pixels[pixelBase + 1] = clampChannel(color.green + foam);
@@ -143,8 +164,12 @@ export const renderState = (
       continue;
     }
 
-    const velocityX = ux[cellIndex];
-    const velocityY = uy[cellIndex];
+    const velocityX = options.interpolationEnabled
+      ? lerp(previousUx[cellIndex], ux[cellIndex], alpha)
+      : ux[cellIndex];
+    const velocityY = options.interpolationEnabled
+      ? lerp(previousUy[cellIndex], uy[cellIndex], alpha)
+      : uy[cellIndex];
 
     if (!Number.isFinite(velocityX) || !Number.isFinite(velocityY)) {
       pixels[pixelBase] = 255;
@@ -156,7 +181,7 @@ export const renderState = (
 
     const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
     const color = sampleSpeedPalette(Math.min(speed * 34, 1));
-    const mixed = blendColor(AIR_COLOR, color, localFill);
+    const mixed = blendColor(AIR_COLOR, color, interpolatedFill);
 
     pixels[pixelBase] = clampChannel(mixed.red);
     pixels[pixelBase + 1] = clampChannel(mixed.green);
