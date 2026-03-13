@@ -1,9 +1,9 @@
 export const CHUNK_SIZE = 32;
 export const DIRECTION_COUNT = 9;
-export const DEFAULT_TAU = 0.9;
+export const DEFAULT_TAU = 0.6;
 export const MIN_TAU = 0.5;
 export const MAX_TAU = 2;
-export const DEFAULT_GRAVITY = 0.0002;
+export const DEFAULT_GRAVITY = 0.0017;
 export const MIN_GRAVITY = 0;
 export const MAX_GRAVITY = 0.002;
 export const DEFAULT_ROTATION_DEGREES = 0;
