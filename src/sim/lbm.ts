@@ -624,6 +624,36 @@ const distributeExcessMass = (
   }
 };
 
+const setCellToFluid = (state: SimulationState, cellIndex: number) => {
+  const { fields } = state.domain;
+  const density = Math.max(fields.rho[cellIndex], MIN_DENSITY);
+  fields.flags[cellIndex] = CELL_FLUID;
+  fields.mass[cellIndex] = density;
+  fields.fill[cellIndex] = 1;
+};
+
+const setCellToInterface = (state: SimulationState, cellIndex: number) => {
+  const { fields } = state.domain;
+  const density = Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY);
+  fields.flags[cellIndex] = CELL_INTERFACE;
+  fields.mass[cellIndex] = clamp(fields.mass[cellIndex], 0, density);
+  fields.fill[cellIndex] = clamp(fields.mass[cellIndex] / density, 0, 1);
+};
+
+const setCellToEmpty = (state: SimulationState, cellIndex: number) => {
+  const { fields } = state.domain;
+  fields.flags[cellIndex] = CELL_EMPTY;
+  fields.mass[cellIndex] = 0;
+  fields.fill[cellIndex] = 0;
+  fields.rho[cellIndex] = ATMOSPHERIC_DENSITY;
+  fields.ux[cellIndex] = 0;
+  fields.uy[cellIndex] = 0;
+
+  for (let direction = 0; direction < DIRECTION_COUNT; direction += 1) {
+    fields.nextDistributions[pdfIndex(cellIndex, direction)] = 0;
+  }
+};
+
 const postProcessInterface = (state: SimulationState) => {
   const { fields, width, height } = state.domain;
   const fills: number[] = [];
@@ -642,10 +672,16 @@ const postProcessInterface = (state: SimulationState) => {
       const fill = clamp(fields.mass[cellIndex] / density, 0, 1);
       fields.fill[cellIndex] = fill;
 
-      const hasEmpty = hasNeighborType(fields.flags, width, height, x, y, CELL_EMPTY);
-      const hasFluid = hasNeighborType(fields.flags, width, height, x, y, CELL_FLUID);
+      const neighborStats = collectNeighborStats(fields.flags, width, height, x, y);
+      const hasEmpty = neighborStats.touchesEmpty;
+      const hasFluid = neighborStats.touchesFluid;
+      const zebraCandidate = isZebraCandidate(CELL_INTERFACE, neighborStats);
+      const strongLiquidSupport = hasFluid && neighborStats.liquidNeighborCount >= 3;
 
-      if (!hasEmpty || fields.mass[cellIndex] > (1 + FILL_OFFSET) * density || (!hasFluid && fill > 0.95)) {
+      if (
+        fields.mass[cellIndex] > (1 + FILL_OFFSET) * density ||
+        (!hasEmpty && strongLiquidSupport && !zebraCandidate && fill > MAX_FILL)
+      ) {
         fills.push(cellIndex);
         continue;
       }
@@ -798,44 +834,48 @@ const postProcessInterface = (state: SimulationState) => {
     for (let y = 1; y < height - 1; y += 1) {
       for (let x = 1; x < width - 1; x += 1) {
         const cellIndex = y * width + x;
+        const flag = fields.flags[cellIndex];
+        if (!isLiquid(flag)) {
+          continue;
+        }
 
-        if (fields.flags[cellIndex] === CELL_FLUID && hasNeighborType(fields.flags, width, height, x, y, CELL_EMPTY)) {
-          fields.flags[cellIndex] = CELL_INTERFACE;
-          fields.mass[cellIndex] = clamp(
-            fields.mass[cellIndex],
-            0,
-            Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY),
-          );
-          fields.fill[cellIndex] = clamp(
-            fields.mass[cellIndex] / Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY),
-            0,
-            1,
-          );
-          changed = true;
-        } else if (
-          fields.flags[cellIndex] === CELL_INTERFACE &&
-          !hasNeighborType(fields.flags, width, height, x, y, CELL_FLUID)
-        ) {
-          const density = Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY);
-          const fill = clamp(fields.mass[cellIndex] / density, 0, 1);
+        const neighborStats = collectNeighborStats(fields.flags, width, height, x, y);
+        const density = Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY);
+        const fill = clamp(fields.mass[cellIndex] / density, 0, 1);
+        const zebraCandidate = isZebraCandidate(flag, neighborStats);
+        const strongLiquidSupport =
+          neighborStats.touchesFluid && neighborStats.liquidNeighborCount >= 3;
 
-          if (fill > 0.5) {
-            fields.flags[cellIndex] = CELL_FLUID;
-            fields.mass[cellIndex] = density;
-            fields.fill[cellIndex] = 1;
-          } else {
-            fields.flags[cellIndex] = CELL_EMPTY;
-            fields.mass[cellIndex] = 0;
-            fields.fill[cellIndex] = 0;
-            fields.rho[cellIndex] = ATMOSPHERIC_DENSITY;
-            fields.ux[cellIndex] = 0;
-            fields.uy[cellIndex] = 0;
-
-            for (let direction = 0; direction < DIRECTION_COUNT; direction += 1) {
-              fields.nextDistributions[pdfIndex(cellIndex, direction)] = 0;
-            }
+        if (flag === CELL_FLUID) {
+          if (neighborStats.touchesEmpty || zebraCandidate) {
+            setCellToInterface(state, cellIndex);
+            changed = true;
           }
+          continue;
+        }
 
+        if (zebraCandidate) {
+          if (neighborStats.touchesFluid) {
+            setCellToInterface(state, cellIndex);
+          } else {
+            setCellToEmpty(state, cellIndex);
+          }
+          changed = true;
+          continue;
+        }
+
+        if (!neighborStats.touchesFluid) {
+          setCellToEmpty(state, cellIndex);
+          changed = true;
+          continue;
+        }
+
+        if (!neighborStats.touchesEmpty) {
+          if (strongLiquidSupport && fill > MAX_FILL) {
+            setCellToFluid(state, cellIndex);
+          } else {
+            setCellToInterface(state, cellIndex);
+          }
           changed = true;
         }
       }
