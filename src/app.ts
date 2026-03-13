@@ -36,8 +36,8 @@ if (
   throw new Error("Expected app layout elements in index.html");
 }
 
-const CANVAS_WIDTH = 200;
-const CANVAS_HEIGHT = 200;
+const CANVAS_WIDTH = 512;
+const CANVAS_HEIGHT = 512;
 const MIN_CANVAS_SCALE = 0.25;
 const MAX_CANVAS_SCALE = 32;
 const ZOOM_STEP = 0.0015;
