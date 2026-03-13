@@ -8,6 +8,8 @@ export type AnimationBuffer = {
 };
 
 export type AnimationOptions = {
+  gravityMagnitude: number;
+  rotationRadians: number;
   tau: number;
   visualizationMode: VisualizationMode;
 };
@@ -45,5 +47,12 @@ export const animate = (
     throw new Error("Expected simulation to be initialized");
   }
 
-  simulation.step(dt, buffer.pixels, options.visualizationMode, options.tau);
+  simulation.step(
+    dt,
+    buffer.pixels,
+    options.visualizationMode,
+    options.tau,
+    options.gravityMagnitude,
+    options.rotationRadians,
+  );
 };

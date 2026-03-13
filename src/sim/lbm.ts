@@ -1,5 +1,6 @@
 import {
   DIRECTION_COUNT,
+  DIRECTION_WEIGHTS,
   DIRECTIONS_X,
   DIRECTIONS_Y,
   OPPOSITE_DIRECTIONS,
@@ -84,13 +85,26 @@ const collideBgk = (
   velocityX: number,
   velocityY: number,
   omega: number,
+  forceX: number,
+  forceY: number,
   populations: Float32Array,
 ) => {
   for (let direction = 0; direction < DIRECTION_COUNT; direction += 1) {
+    const cx = DIRECTIONS_X[direction];
+    const cy = DIRECTIONS_Y[direction];
     const streamedValue = populations[direction];
+    const ciDotU = cx * velocityX + cy * velocityY;
+    const ciDotF = cx * forceX + cy * forceY;
+    const forcing =
+      DIRECTION_WEIGHTS[direction] *
+      (1 - 0.5 * omega) *
+      (3 * ((cx - velocityX) * forceX + (cy - velocityY) * forceY) +
+        9 * ciDotU * ciDotF);
+
     fields.nextDistributions[cellBase + direction] =
       streamedValue +
-      omega * (equilibrium(direction, density, velocityX, velocityY) - streamedValue);
+      omega * (equilibrium(direction, density, velocityX, velocityY) - streamedValue) +
+      forcing;
   }
 };
 
@@ -102,6 +116,8 @@ const stepFluidCell = (
   y: number,
   cellIndex: number,
   omega: number,
+  gravityX: number,
+  gravityY: number,
   populations: Float32Array,
 ) => {
   const cellBase = cellIndex * DIRECTION_COUNT;
@@ -110,8 +126,10 @@ const stepFluidCell = (
 
   const density = computeDensity(populations);
   const safeDensity = density > 1e-6 ? density : 1e-6;
-  const velocityX = computeVelocityX(populations, safeDensity);
-  const velocityY = computeVelocityY(populations, safeDensity);
+  const velocityX = computeVelocityX(populations, safeDensity) + 0.5 * gravityX;
+  const velocityY = computeVelocityY(populations, safeDensity) + 0.5 * gravityY;
+  const forceX = density * gravityX;
+  const forceY = density * gravityY;
 
   if (
     !Number.isFinite(density) ||
@@ -123,13 +141,24 @@ const stepFluidCell = (
   }
 
   writeMacroscopicFields(fields, cellIndex, density, velocityX, velocityY);
-  collideBgk(fields, cellBase, density, velocityX, velocityY, omega, populations);
+  collideBgk(
+    fields,
+    cellBase,
+    density,
+    velocityX,
+    velocityY,
+    omega,
+    forceX,
+    forceY,
+    populations,
+  );
 };
 
 export const stepChunk = (state: SimulationState, chunk: Chunk) => {
   const { fields, height, width } = state.domain;
   const { flags } = fields;
   const omega = 1 / state.runtime.tau;
+  const { gravityX, gravityY } = state.runtime;
   const populations = new Float32Array(DIRECTION_COUNT);
 
   for (let localY = 0; localY < chunk.height; localY += 1) {
@@ -145,7 +174,18 @@ export const stepChunk = (state: SimulationState, chunk: Chunk) => {
         continue;
       }
 
-      stepFluidCell(fields, width, height, x, y, cellIndex, omega, populations);
+      stepFluidCell(
+        fields,
+        width,
+        height,
+        x,
+        y,
+        cellIndex,
+        omega,
+        gravityX,
+        gravityY,
+        populations,
+      );
     }
   }
 };

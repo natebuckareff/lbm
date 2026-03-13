@@ -101,6 +101,8 @@ export const createSimulationState = (
     },
     runtime: {
       accumulator: 0,
+      gravityX: 0,
+      gravityY: 0,
       tau: DEFAULT_TAU,
     },
   };

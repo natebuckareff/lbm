@@ -20,6 +20,8 @@ export type Simulation = {
     pixels: Uint8ClampedArray,
     mode: VisualizationMode,
     tau: number,
+    gravityMagnitude: number,
+    rotationRadians: number,
   ) => void;
 };
 
@@ -39,8 +41,10 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
   });
 
   return {
-    step(dt, pixels, mode, tau) {
+    step(dt, pixels, mode, tau, gravityMagnitude, rotationRadians) {
       state.runtime.tau = tau;
+      state.runtime.gravityX = gravityMagnitude * Math.sin(rotationRadians);
+      state.runtime.gravityY = gravityMagnitude * Math.cos(rotationRadians);
       state.runtime.accumulator += dt * STEPS_PER_SECOND;
 
       let steps = 0;

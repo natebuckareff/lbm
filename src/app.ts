@@ -1,5 +1,16 @@
 import { animate, resetSimulation } from "./animate";
-import { CHUNK_SIZE, DEFAULT_TAU, MAX_TAU, MIN_TAU } from "./sim/constants";
+import {
+  CHUNK_SIZE,
+  DEFAULT_GRAVITY,
+  DEFAULT_ROTATION_DEGREES,
+  DEFAULT_TAU,
+  MAX_GRAVITY,
+  MAX_ROTATION_DEGREES,
+  MAX_TAU,
+  MIN_GRAVITY,
+  MIN_ROTATION_DEGREES,
+  MIN_TAU,
+} from "./sim/constants";
 import type { VisualizationMode } from "./sim/render";
 
 const appRoot = document.querySelector<HTMLDivElement>("#app");
@@ -27,6 +38,10 @@ const visualizationModeSelect =
   document.querySelector<HTMLSelectElement>(".visualization-mode");
 const tauSlider = document.querySelector<HTMLInputElement>(".tau-slider");
 const tauValue = document.querySelector<HTMLElement>(".tau-value");
+const gravitySlider = document.querySelector<HTMLInputElement>(".gravity-slider");
+const gravityValue = document.querySelector<HTMLElement>(".gravity-value");
+const rotationSlider = document.querySelector<HTMLInputElement>(".rotation-slider");
+const rotationValue = document.querySelector<HTMLElement>(".rotation-value");
 const chunkGridToggle =
   document.querySelector<HTMLInputElement>(".chunk-grid-toggle");
 
@@ -52,6 +67,10 @@ if (
   !visualizationModeSelect ||
   !tauSlider ||
   !tauValue ||
+  !gravitySlider ||
+  !gravityValue ||
+  !rotationSlider ||
+  !rotationValue ||
   !chunkGridToggle
 ) {
   throw new Error("Expected app layout elements in index.html");
@@ -91,6 +110,8 @@ let animationBuffer: MutableAnimationBuffer = {
 };
 let visualizationMode: VisualizationMode = "speed";
 let tau = DEFAULT_TAU;
+let gravityMagnitude = DEFAULT_GRAVITY;
+let rotationDegrees = DEFAULT_ROTATION_DEGREES;
 let isChunkGridVisible = false;
 
 const setCanvasDimensions = (width: number, height: number) => {
@@ -154,13 +175,58 @@ const renderChunkGrid = () => {
   context.restore();
 };
 
+const drawGravityArrow = () => {
+  if (gravityMagnitude <= 0) {
+    return;
+  }
+
+  const angleRadians = (rotationDegrees * Math.PI) / 180;
+  const directionX = Math.sin(angleRadians);
+  const directionY = Math.cos(angleRadians);
+  const centerX = 42;
+  const centerY = 42;
+  const shaftLength = 22;
+  const headLength = 8;
+  const tipX = centerX + directionX * shaftLength;
+  const tipY = centerY + directionY * shaftLength;
+  const baseX = centerX - directionX * 6;
+  const baseY = centerY - directionY * 6;
+  const leftHeadX = tipX - directionX * headLength - directionY * 4;
+  const leftHeadY = tipY - directionY * headLength + directionX * 4;
+  const rightHeadX = tipX - directionX * headLength + directionY * 4;
+  const rightHeadY = tipY - directionY * headLength - directionX * 4;
+
+  context.save();
+  context.strokeStyle = "rgba(255, 248, 220, 0.95)";
+  context.fillStyle = "rgba(255, 248, 220, 0.95)";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(baseX, baseY);
+  context.lineTo(tipX, tipY);
+  context.stroke();
+  context.beginPath();
+  context.moveTo(tipX, tipY);
+  context.lineTo(leftHeadX, leftHeadY);
+  context.lineTo(rightHeadX, rightHeadY);
+  context.closePath();
+  context.fill();
+  context.restore();
+};
+
 const renderCurrentFrame = (dt: number) => {
-  animate(animationBuffer, dt, { tau, visualizationMode });
+  animate(animationBuffer, dt, {
+    gravityMagnitude,
+    rotationRadians: (rotationDegrees * Math.PI) / 180,
+    tau,
+    visualizationMode,
+  });
   presentPixels();
 
   if (isChunkGridVisible) {
     renderChunkGrid();
   }
+
+  drawGravityArrow();
 };
 
 const applyPendingGridSize = () => {
@@ -266,6 +332,8 @@ visualizationModeSelect.addEventListener("change", () => {
 });
 
 const formatTau = (value: number) => value.toFixed(2);
+const formatGravity = (value: number) => value.toFixed(5);
+const formatRotation = (value: number) => `${Math.round(value)}°`;
 
 tauSlider.min = String(MIN_TAU);
 tauSlider.max = String(MAX_TAU);
@@ -282,6 +350,45 @@ tauSlider.addEventListener("input", () => {
 
   tau = Math.max(MIN_TAU, Math.min(MAX_TAU, nextTau));
   tauValue.textContent = formatTau(tau);
+  renderCurrentFrame(0);
+});
+
+gravitySlider.min = String(MIN_GRAVITY);
+gravitySlider.max = String(MAX_GRAVITY);
+gravitySlider.step = "0.00001";
+gravitySlider.value = String(DEFAULT_GRAVITY);
+gravityValue.textContent = formatGravity(DEFAULT_GRAVITY);
+
+gravitySlider.addEventListener("input", () => {
+  const nextGravity = Number.parseFloat(gravitySlider.value);
+
+  if (!Number.isFinite(nextGravity)) {
+    return;
+  }
+
+  gravityMagnitude = Math.max(MIN_GRAVITY, Math.min(MAX_GRAVITY, nextGravity));
+  gravityValue.textContent = formatGravity(gravityMagnitude);
+  renderCurrentFrame(0);
+});
+
+rotationSlider.min = String(MIN_ROTATION_DEGREES);
+rotationSlider.max = String(MAX_ROTATION_DEGREES);
+rotationSlider.step = "1";
+rotationSlider.value = String(DEFAULT_ROTATION_DEGREES);
+rotationValue.textContent = formatRotation(DEFAULT_ROTATION_DEGREES);
+
+rotationSlider.addEventListener("input", () => {
+  const nextRotation = Number.parseFloat(rotationSlider.value);
+
+  if (!Number.isFinite(nextRotation)) {
+    return;
+  }
+
+  rotationDegrees = Math.max(
+    MIN_ROTATION_DEGREES,
+    Math.min(MAX_ROTATION_DEGREES, nextRotation),
+  );
+  rotationValue.textContent = formatRotation(rotationDegrees);
   renderCurrentFrame(0);
 });
 

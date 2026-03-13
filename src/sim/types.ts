@@ -43,6 +43,8 @@ export type SimulationDomain = {
 
 export type SimulationRuntime = {
   accumulator: number;
+  gravityX: number;
+  gravityY: number;
   tau: number;
 };
 
