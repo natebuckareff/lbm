@@ -1,17 +1,33 @@
+import { createSimulation, type FrameBuffer } from "./sim";
+
 export type AnimationBuffer = {
   height: number;
   pixels: Uint8ClampedArray;
   width: number;
 };
 
-export const animate = (buffer: AnimationBuffer, _dt: number) => {
-  const { pixels } = buffer;
+let simulation: ReturnType<typeof createSimulation> | null = null;
+let simulationWidth = 0;
+let simulationHeight = 0;
 
-  for (let index = 0; index < pixels.length; index += 4) {
-    const value = Math.floor(Math.random() * 256);
-    pixels[index] = value;
-    pixels[index + 1] = value;
-    pixels[index + 2] = value;
-    pixels[index + 3] = 255;
+const ensureSimulation = (buffer: FrameBuffer) => {
+  if (
+    simulation === null ||
+    buffer.width !== simulationWidth ||
+    buffer.height !== simulationHeight
+  ) {
+    simulation = createSimulation(buffer);
+    simulationWidth = buffer.width;
+    simulationHeight = buffer.height;
   }
+};
+
+export const animate = (buffer: AnimationBuffer, dt: number) => {
+  ensureSimulation(buffer);
+
+  if (simulation === null) {
+    throw new Error("Expected simulation to be initialized");
+  }
+
+  simulation.step(dt, buffer.pixels);
 };
