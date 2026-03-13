@@ -1,5 +1,7 @@
 import { CELL_SOLID, type SimulationState } from "./types";
 
+export type VisualizationMode = "density" | "speed";
+
 const clampChannel = (value: number) => {
   if (value <= 0) {
     return 0;
@@ -16,47 +18,30 @@ const lerp = (start: number, end: number, amount: number) => {
   return start + (end - start) * amount;
 };
 
-const sampleSpeedPalette = (normalizedSpeed: number) => {
-  const t = Math.max(0, Math.min(1, normalizedSpeed));
-
-  if (t < 0.25) {
-    const localT = t / 0.25;
-    return {
-      blue: lerp(40, 190, localT),
-      green: lerp(18, 80, localT),
-      red: lerp(8, 35, localT),
-    };
-  }
+const sampleDensityPalette = (normalizedDensity: number) => {
+  const t = Math.max(0, Math.min(1, normalizedDensity));
 
   if (t < 0.5) {
-    const localT = (t - 0.25) / 0.25;
+    const localT = t / 0.5;
     return {
-      blue: lerp(190, 235, localT),
-      green: lerp(80, 215, localT),
-      red: lerp(35, 45, localT),
+      blue: lerp(210, 184, localT),
+      green: lerp(56, 172, localT),
+      red: lerp(32, 180, localT),
     };
   }
 
-  if (t < 0.75) {
-    const localT = (t - 0.5) / 0.25;
-    return {
-      blue: lerp(235, 70, localT),
-      green: lerp(215, 225, localT),
-      red: lerp(45, 250, localT),
-    };
-  }
-
-  const localT = (t - 0.75) / 0.25;
+  const localT = (t - 0.5) / 0.5;
   return {
-    blue: lerp(70, 250, localT),
-    green: lerp(225, 245, localT),
-    red: lerp(250, 255, localT),
+    blue: lerp(184, 44, localT),
+    green: lerp(172, 52, localT),
+    red: lerp(180, 208, localT),
   };
 };
 
 export const renderState = (
   state: SimulationState,
   pixels: Uint8ClampedArray,
+  mode: VisualizationMode,
 ) => {
   const { flags, rho, ux, uy } = state;
 
@@ -88,9 +73,22 @@ export const renderState = (
     }
 
     const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+
+    if (mode === "density") {
+      const densityDelta = Math.max(-0.03, Math.min(0.03, density - 1));
+      const normalizedDensity = (densityDelta + 0.03) / 0.06;
+      const palette = sampleDensityPalette(normalizedDensity);
+
+      pixels[pixelBase] = clampChannel(palette.red);
+      pixels[pixelBase + 1] = clampChannel(palette.green);
+      pixels[pixelBase + 2] = clampChannel(palette.blue);
+      pixels[pixelBase + 3] = 255;
+      continue;
+    }
+
     const densityBias = Math.max(-0.04, Math.min(0.04, density - 1));
     const normalizedSpeed = Math.min(speed * 28, 1);
-    const palette = sampleSpeedPalette(normalizedSpeed);
+    const palette = sampleDensityPalette(normalizedSpeed);
     const densityLift = densityBias * 700;
 
     pixels[pixelBase] = clampChannel(palette.red + densityLift);

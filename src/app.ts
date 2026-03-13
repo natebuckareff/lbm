@@ -1,4 +1,5 @@
 import { animate } from "./animate";
+import type { VisualizationMode } from "./sim/render";
 
 const appRoot = document.querySelector<HTMLDivElement>("#app");
 const shell = document.querySelector<HTMLElement>(".app-shell");
@@ -15,6 +16,8 @@ const animationToggleButton =
   document.querySelector<HTMLButtonElement>(".animation-toggle");
 const viewResetButton =
   document.querySelector<HTMLButtonElement>(".view-reset");
+const visualizationModeSelect =
+  document.querySelector<HTMLSelectElement>(".visualization-mode");
 
 if (!appRoot) {
   throw new Error("Expected #app mount element");
@@ -31,7 +34,8 @@ if (
   !canvasStage ||
   !mainCanvas ||
   !animationToggleButton ||
-  !viewResetButton
+  !viewResetButton ||
+  !visualizationModeSelect
 ) {
   throw new Error("Expected app layout elements in index.html");
 }
@@ -63,9 +67,15 @@ const animationBuffer = {
   pixels: pixelBytes,
   width: CANVAS_WIDTH,
 };
+let visualizationMode: VisualizationMode = "speed";
 
 const presentPixels = () => {
   context.putImageData(pixelImage, 0, 0);
+};
+
+const renderCurrentFrame = (dt: number) => {
+  animate(animationBuffer, dt, { visualizationMode });
+  presentPixels();
 };
 
 let isAnimationRunning = false;
@@ -76,8 +86,7 @@ const frame = (now: number) => {
   lastFrameTime = now;
 
   if (isAnimationRunning) {
-    animate(animationBuffer, dt);
-    presentPixels();
+    renderCurrentFrame(dt);
   }
   requestAnimationFrame(frame);
 };
@@ -143,6 +152,15 @@ animationToggleButton.addEventListener("click", () => {
 
 viewResetButton.addEventListener("click", () => {
   resetCanvasView();
+});
+
+visualizationModeSelect.addEventListener("change", () => {
+  const nextMode = visualizationModeSelect.value;
+
+  if (nextMode === "density" || nextMode === "speed") {
+    visualizationMode = nextMode;
+    renderCurrentFrame(0);
+  }
 });
 
 const COLLAPSED_INSPECTOR_HEIGHT = 24;

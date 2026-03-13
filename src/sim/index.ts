@@ -4,7 +4,7 @@ import {
   STEPS_PER_SECOND,
 } from "./constants";
 import { stepChunk, swapDistributionBuffers } from "./lbm";
-import { renderState } from "./render";
+import { renderState, type VisualizationMode } from "./render";
 import { createSimulationState } from "./state";
 import type { SimulationState } from "./types";
 
@@ -15,7 +15,11 @@ export type FrameBuffer = {
 };
 
 export type Simulation = {
-  step: (dt: number, pixels: Uint8ClampedArray) => void;
+  step: (
+    dt: number,
+    pixels: Uint8ClampedArray,
+    mode: VisualizationMode,
+  ) => void;
 };
 
 const iterateSimulation = (state: SimulationState) => {
@@ -34,7 +38,7 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
   });
 
   return {
-    step(dt, pixels) {
+    step(dt, pixels, mode) {
       state.accumulator += dt * STEPS_PER_SECOND;
 
       let steps = 0;
@@ -49,7 +53,7 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
         state.accumulator = 0;
       }
 
-      renderState(state, pixels);
+      renderState(state, pixels, mode);
     },
   };
 };

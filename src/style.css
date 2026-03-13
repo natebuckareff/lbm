@@ -116,6 +116,34 @@ body {
   outline-offset: 1px;
 }
 
+.side-field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.side-field-label {
+  color: #99a9bb;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.side-select {
+  width: 100%;
+  min-height: 24px;
+  border: 1px solid #304255;
+  background: #152233;
+  color: #d9e2ec;
+  padding: 0 0.45rem;
+  font: inherit;
+  font-size: 0.7rem;
+}
+
+.side-select:focus-visible {
+  outline: 1px solid #7fb3ff;
+  outline-offset: 1px;
+}
+
 .content-panel {
   position: relative;
   min-height: 100vh;
