@@ -51,9 +51,15 @@ export type SimulationDomain = {
 
 export type SimulationRuntime = {
   accumulator: number;
+  debugPreviousFill: Float32Array;
+  debugPreviousFlags: Uint8Array;
+  debugPreviousMass: Float32Array;
+  debugPreviousRho: Float32Array;
   gravityX: number;
   gravityY: number;
+  latestDiagnostics: StepDiagnostics;
   liquidMassTarget: number;
+  stepCount: number;
   tau: number;
 };
 
@@ -62,14 +68,53 @@ export type SimulationState = {
   runtime: SimulationRuntime;
 };
 
+export type PhaseName =
+  | "stream"
+  | "mass"
+  | "post"
+  | "conservation"
+  | "cleanup";
+
+export type PhaseDiagnostics = {
+  changedCells: number;
+  changedFillCells: number;
+  changedFlagCells: number;
+  changedMassCells: number;
+  changedRhoCells: number;
+  emptyCells: number;
+  fluidCells: number;
+  fluidTouchingEmpty: number;
+  interfaceCells: number;
+  interfaceWithoutEmpty: number;
+  interfaceWithoutFluid: number;
+  phase: PhaseName;
+  solidCells: number;
+  zebraCells: number;
+};
+
+export type StepDiagnostics = {
+  phases: PhaseDiagnostics[];
+  step: number;
+};
+
 export type CellDebugInfo = {
+  alternatingNeighborCount: number;
   fill: number;
   flag: CellFlag;
+  interfaceWithoutEmpty: boolean;
+  interfaceWithoutFluid: boolean;
+  latestDiagnostics: StepDiagnostics;
   mass: number;
+  liquidNeighborCount: number;
   normalX: number;
   normalY: number;
   rho: number;
   speed: number;
+  touchesEmpty: boolean;
+  touchesFluid: boolean;
+  touchesInterface: boolean;
+  touchesSolid: boolean;
+  zebraCandidate: boolean;
   ux: number;
   uy: number;
   x: number;

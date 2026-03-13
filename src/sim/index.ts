@@ -1,3 +1,4 @@
+import { DIRECTIONS_X, DIRECTIONS_Y } from "./constants";
 import {
   CHUNK_SIZE,
   MAX_STEPS_PER_FRAME,
@@ -6,7 +7,15 @@ import {
 import { stepChunk, swapDistributionBuffers, updateFreeSurface } from "./lbm";
 import { renderState, type VisualizationMode } from "./render";
 import { createSimulationState } from "./state";
-import type { CellDebugInfo, CellFlag, SimulationState } from "./types";
+import {
+  CELL_EMPTY,
+  CELL_FLUID,
+  CELL_INTERFACE,
+  CELL_SOLID,
+  type CellDebugInfo,
+  type CellFlag,
+  type SimulationState,
+} from "./types";
 
 export type FrameBuffer = {
   height: number;
@@ -56,15 +65,80 @@ const inspectCell = (
   const cellIndex = y * width + x;
   const ux = fields.ux[cellIndex];
   const uy = fields.uy[cellIndex];
+  let touchesEmpty = false;
+  let touchesFluid = false;
+  let touchesInterface = false;
+  let touchesSolid = false;
+  let liquidNeighborCount = 0;
+  let alternatingNeighborCount = 0;
+
+  for (let direction = 1; direction < DIRECTIONS_X.length; direction += 1) {
+    const neighborX = x + DIRECTIONS_X[direction];
+    const neighborY = y + DIRECTIONS_Y[direction];
+
+    if (neighborX < 0 || neighborX >= width || neighborY < 0 || neighborY >= height) {
+      continue;
+    }
+
+    const neighborFlag = fields.flags[neighborY * width + neighborX];
+
+    if (neighborFlag === CELL_EMPTY) {
+      touchesEmpty = true;
+    } else if (neighborFlag === CELL_FLUID) {
+      touchesFluid = true;
+      liquidNeighborCount += 1;
+    } else if (neighborFlag === CELL_INTERFACE) {
+      touchesInterface = true;
+      liquidNeighborCount += 1;
+    } else if (neighborFlag === CELL_SOLID) {
+      touchesSolid = true;
+    }
+  }
+
+  for (const direction of [1, 2, 3, 4]) {
+    const neighborX = x + DIRECTIONS_X[direction];
+    const neighborY = y + DIRECTIONS_Y[direction];
+
+    if (neighborX < 0 || neighborX >= width || neighborY < 0 || neighborY >= height) {
+      continue;
+    }
+
+    const neighborFlag = fields.flags[neighborY * width + neighborX];
+    if (
+      (fields.flags[cellIndex] === CELL_FLUID || fields.flags[cellIndex] === CELL_INTERFACE) &&
+      (neighborFlag === CELL_FLUID || neighborFlag === CELL_INTERFACE) &&
+      neighborFlag !== fields.flags[cellIndex]
+    ) {
+      alternatingNeighborCount += 1;
+    }
+  }
+
+  const zebraCandidate =
+    (fields.flags[cellIndex] === CELL_FLUID || fields.flags[cellIndex] === CELL_INTERFACE) &&
+    touchesEmpty &&
+    alternatingNeighborCount > 0 &&
+    liquidNeighborCount <= 2;
 
   return {
+    alternatingNeighborCount,
     fill: fields.fill[cellIndex],
     flag: fields.flags[cellIndex] as CellFlag,
+    interfaceWithoutEmpty:
+      fields.flags[cellIndex] === CELL_INTERFACE && !touchesEmpty,
+    interfaceWithoutFluid:
+      fields.flags[cellIndex] === CELL_INTERFACE && !touchesFluid,
+    latestDiagnostics: state.runtime.latestDiagnostics,
     mass: fields.mass[cellIndex],
+    liquidNeighborCount,
     normalX: fields.normalX[cellIndex],
     normalY: fields.normalY[cellIndex],
     rho: fields.rho[cellIndex],
     speed: Math.sqrt(ux * ux + uy * uy),
+    touchesEmpty,
+    touchesFluid,
+    touchesInterface,
+    touchesSolid,
+    zebraCandidate,
     ux,
     uy,
     x,

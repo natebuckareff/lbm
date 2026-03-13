@@ -65,6 +65,10 @@ export const createSimulationState = (
   const nextMass = new Float32Array(cellCount);
   const normalX = new Float32Array(cellCount);
   const normalY = new Float32Array(cellCount);
+  const debugPreviousFlags = new Uint8Array(cellCount);
+  const debugPreviousMass = new Float32Array(cellCount);
+  const debugPreviousFill = new Float32Array(cellCount);
+  const debugPreviousRho = new Float32Array(cellCount);
   const rho = new Float32Array(cellCount);
   const ux = new Float32Array(cellCount);
   const uy = new Float32Array(cellCount);
@@ -128,6 +132,10 @@ export const createSimulationState = (
   nextFlags.set(flags);
   nextFill.set(fill);
   nextMass.set(mass);
+  debugPreviousFlags.set(flags);
+  debugPreviousMass.set(mass);
+  debugPreviousFill.set(fill);
+  debugPreviousRho.set(rho);
 
   return {
     domain: {
@@ -156,9 +164,18 @@ export const createSimulationState = (
     },
     runtime: {
       accumulator: 0,
+      debugPreviousFill,
+      debugPreviousFlags,
+      debugPreviousMass,
+      debugPreviousRho,
       gravityX: 0,
       gravityY: 0,
+      latestDiagnostics: {
+        phases: [],
+        step: 0,
+      },
       liquidMassTarget: mass.reduce((sum, value) => sum + value, 0),
+      stepCount: 0,
       tau: DEFAULT_TAU,
     },
   };

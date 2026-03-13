@@ -18,6 +18,8 @@ import {
   CELL_INTERFACE,
   CELL_SOLID,
   type Chunk,
+  type PhaseDiagnostics,
+  type PhaseName,
   type SimulationState,
 } from "./types";
 
@@ -47,6 +49,8 @@ const isLiquid = (flag: number) => {
   return flag === CELL_FLUID || flag === CELL_INTERFACE;
 };
 
+const CARDINAL_DIRECTIONS = [1, 2, 3, 4];
+
 const hasNeighborType = (
   flags: Uint8Array,
   width: number,
@@ -69,6 +73,182 @@ const hasNeighborType = (
   }
 
   return false;
+};
+
+const collectNeighborStats = (
+  flags: Uint8Array,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+) => {
+  let touchesEmpty = false;
+  let touchesFluid = false;
+  let touchesInterface = false;
+  let touchesSolid = false;
+  let liquidNeighborCount = 0;
+  let alternatingNeighborCount = 0;
+  const flag = flags[y * width + x];
+
+  for (let direction = 1; direction < DIRECTION_COUNT; direction += 1) {
+    const neighborX = x + DIRECTIONS_X[direction];
+    const neighborY = y + DIRECTIONS_Y[direction];
+
+    if (neighborX < 0 || neighborX >= width || neighborY < 0 || neighborY >= height) {
+      continue;
+    }
+
+    const neighborFlag = flags[neighborY * width + neighborX];
+
+    if (neighborFlag === CELL_EMPTY) {
+      touchesEmpty = true;
+    } else if (neighborFlag === CELL_FLUID) {
+      touchesFluid = true;
+      liquidNeighborCount += 1;
+    } else if (neighborFlag === CELL_INTERFACE) {
+      touchesInterface = true;
+      liquidNeighborCount += 1;
+    } else if (neighborFlag === CELL_SOLID) {
+      touchesSolid = true;
+    }
+  }
+
+  for (const direction of CARDINAL_DIRECTIONS) {
+    const neighborX = x + DIRECTIONS_X[direction];
+    const neighborY = y + DIRECTIONS_Y[direction];
+
+    if (neighborX < 0 || neighborX >= width || neighborY < 0 || neighborY >= height) {
+      continue;
+    }
+
+    const neighborFlag = flags[neighborY * width + neighborX];
+    if (isLiquid(flag) && isLiquid(neighborFlag) && neighborFlag !== flag) {
+      alternatingNeighborCount += 1;
+    }
+  }
+
+  return {
+    alternatingNeighborCount,
+    liquidNeighborCount,
+    touchesEmpty,
+    touchesFluid,
+    touchesInterface,
+    touchesSolid,
+  };
+};
+
+const isZebraCandidate = (
+  flag: number,
+  neighborStats: ReturnType<typeof collectNeighborStats>,
+) => {
+  return (
+    isLiquid(flag) &&
+    neighborStats.touchesEmpty &&
+    neighborStats.alternatingNeighborCount > 0 &&
+    neighborStats.liquidNeighborCount <= 2
+  );
+};
+
+const capturePhaseDiagnostics = (
+  state: SimulationState,
+  phase: PhaseName,
+) => {
+  const { fields, width, height } = state.domain;
+  const {
+    debugPreviousFill,
+    debugPreviousFlags,
+    debugPreviousMass,
+    debugPreviousRho,
+  } = state.runtime;
+
+  const diagnostics: PhaseDiagnostics = {
+    changedCells: 0,
+    changedFillCells: 0,
+    changedFlagCells: 0,
+    changedMassCells: 0,
+    changedRhoCells: 0,
+    emptyCells: 0,
+    fluidCells: 0,
+    fluidTouchingEmpty: 0,
+    interfaceCells: 0,
+    interfaceWithoutEmpty: 0,
+    interfaceWithoutFluid: 0,
+    phase,
+    solidCells: 0,
+    zebraCells: 0,
+  };
+
+  for (let cellIndex = 0; cellIndex < fields.flags.length; cellIndex += 1) {
+    const x = cellIndex % width;
+    const y = Math.floor(cellIndex / width);
+    const flag = fields.flags[cellIndex];
+    const fill = fields.fill[cellIndex];
+    const mass = fields.mass[cellIndex];
+    const rho = fields.rho[cellIndex];
+    const flagChanged = debugPreviousFlags[cellIndex] !== flag;
+    const fillChanged = Math.abs(debugPreviousFill[cellIndex] - fill) > 1e-5;
+    const massChanged = Math.abs(debugPreviousMass[cellIndex] - mass) > 1e-5;
+    const rhoChanged = Math.abs(debugPreviousRho[cellIndex] - rho) > 1e-5;
+
+    if (flagChanged || fillChanged || massChanged || rhoChanged) {
+      diagnostics.changedCells += 1;
+    }
+    if (flagChanged) {
+      diagnostics.changedFlagCells += 1;
+    }
+    if (fillChanged) {
+      diagnostics.changedFillCells += 1;
+    }
+    if (massChanged) {
+      diagnostics.changedMassCells += 1;
+    }
+    if (rhoChanged) {
+      diagnostics.changedRhoCells += 1;
+    }
+
+    if (flag === CELL_FLUID) {
+      diagnostics.fluidCells += 1;
+    } else if (flag === CELL_INTERFACE) {
+      diagnostics.interfaceCells += 1;
+    } else if (flag === CELL_EMPTY) {
+      diagnostics.emptyCells += 1;
+    } else if (flag === CELL_SOLID) {
+      diagnostics.solidCells += 1;
+    }
+
+    if (!isLiquid(flag)) {
+      debugPreviousFlags[cellIndex] = flag;
+      debugPreviousFill[cellIndex] = fill;
+      debugPreviousMass[cellIndex] = mass;
+      debugPreviousRho[cellIndex] = rho;
+      continue;
+    }
+
+    const neighborStats = collectNeighborStats(fields.flags, width, height, x, y);
+
+    if (flag === CELL_FLUID && neighborStats.touchesEmpty) {
+      diagnostics.fluidTouchingEmpty += 1;
+    }
+
+    if (flag === CELL_INTERFACE && !neighborStats.touchesFluid) {
+      diagnostics.interfaceWithoutFluid += 1;
+    }
+
+    if (flag === CELL_INTERFACE && !neighborStats.touchesEmpty) {
+      diagnostics.interfaceWithoutEmpty += 1;
+    }
+
+    if (isZebraCandidate(flag, neighborStats)) {
+      diagnostics.zebraCells += 1;
+    }
+
+    debugPreviousFlags[cellIndex] = flag;
+    debugPreviousFill[cellIndex] = fill;
+    debugPreviousMass[cellIndex] = mass;
+    debugPreviousRho[cellIndex] = rho;
+  }
+
+  state.runtime.latestDiagnostics.phases.push(diagnostics);
 };
 
 const averageLiquidNeighborhood = (
@@ -931,13 +1111,23 @@ export const stepChunk = (state: SimulationState, chunk: Chunk) => {
 };
 
 export const updateFreeSurface = (state: SimulationState) => {
+  state.runtime.stepCount += 1;
+  state.runtime.latestDiagnostics = {
+    phases: [],
+    step: state.runtime.stepCount,
+  };
   computeInterfaceNormals(state);
   streamDistributions(state);
   recomputeMacroscopicFields(state);
+  capturePhaseDiagnostics(state, "stream");
   updateInterfaceMass(state);
+  capturePhaseDiagnostics(state, "mass");
   postProcessInterface(state);
+  capturePhaseDiagnostics(state, "post");
   applyMassConservation(state);
+  capturePhaseDiagnostics(state, "conservation");
   removeTinyDetachedComponents(state);
+  capturePhaseDiagnostics(state, "cleanup");
 };
 
 export const swapDistributionBuffers = (state: SimulationState) => {

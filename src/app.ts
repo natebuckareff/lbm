@@ -17,6 +17,7 @@ import {
   MIN_TAU,
 } from "./sim/constants";
 import type { VisualizationMode } from "./sim/render";
+import type { CellDebugInfo, PhaseDiagnostics } from "./sim/types";
 
 const appRoot = document.querySelector<HTMLDivElement>("#app");
 const shell = document.querySelector<HTMLElement>(".app-shell");
@@ -86,8 +87,8 @@ if (
   throw new Error("Expected app layout elements in index.html");
 }
 
-const DEFAULT_GRID_WIDTH = 256;
-const DEFAULT_GRID_HEIGHT = 256;
+const DEFAULT_GRID_WIDTH = 128;
+const DEFAULT_GRID_HEIGHT = 128;
 const MIN_GRID_SIZE = 32;
 const MAX_GRID_SIZE = 1024;
 const MIN_CANVAS_SCALE = 0.25;
@@ -182,9 +183,60 @@ const formatFlag = (flag: number) => {
   }
 };
 
+const formatBoolean = (value: boolean) => (value ? "yes" : "no");
+
+const renderDiagnosticsSummary = (info: CellDebugInfo | null) => {
+  const diagnostics = info?.latestDiagnostics;
+
+  if (!diagnostics || diagnostics.phases.length === 0) {
+    return `
+      <div class="inspector-section">
+        <div class="inspector-section-title">Last Step</div>
+        <div class="inspector-empty">No step diagnostics yet.</div>
+      </div>
+    `;
+  }
+
+  const phaseRows = diagnostics.phases
+    .map(
+      (phase: PhaseDiagnostics) => `
+        <tr>
+          <td>${phase.phase}</td>
+          <td>${phase.changedCells}</td>
+          <td>${phase.fluidTouchingEmpty}</td>
+          <td>${phase.interfaceWithoutFluid}</td>
+          <td>${phase.interfaceWithoutEmpty}</td>
+          <td>${phase.zebraCells}</td>
+        </tr>
+      `,
+    )
+    .join("");
+
+  return `
+    <div class="inspector-section">
+      <div class="inspector-section-title">Last Step #${diagnostics.step}</div>
+      <table class="inspector-table">
+        <thead>
+          <tr>
+            <th>Phase</th>
+            <th>Changed</th>
+            <th>F-E</th>
+            <th>I-noF</th>
+            <th>I-noE</th>
+            <th>Zebra</th>
+          </tr>
+        </thead>
+        <tbody>${phaseRows}</tbody>
+      </table>
+    </div>
+  `;
+};
+
 const updateInspector = () => {
   if (hoveredCellX < 0 || hoveredCellY < 0) {
+    const info = inspectSimulationCell(animationBuffer, 0, 0);
     inspectorBody.innerHTML = `
+      ${renderDiagnosticsSummary(info)}
       <div class="inspector-empty">Hover the simulation to inspect a cell.</div>
     `;
     return;
@@ -193,24 +245,44 @@ const updateInspector = () => {
   const info = inspectSimulationCell(animationBuffer, hoveredCellX, hoveredCellY);
 
   if (info === null) {
+    const fallbackInfo = inspectSimulationCell(animationBuffer, 0, 0);
     inspectorBody.innerHTML = `
+      ${renderDiagnosticsSummary(fallbackInfo)}
       <div class="inspector-empty">Pointer is outside the simulation domain.</div>
     `;
     return;
   }
 
   inspectorBody.innerHTML = `
-    <div class="inspector-grid">
-      <div class="inspector-label">Cell</div><div>${info.x}, ${info.y}</div>
-      <div class="inspector-label">Type</div><div>${formatFlag(info.flag)}</div>
-      <div class="inspector-label">Fill</div><div>${info.fill.toFixed(3)}</div>
-      <div class="inspector-label">Mass</div><div>${info.mass.toFixed(4)}</div>
-      <div class="inspector-label">Rho</div><div>${info.rho.toFixed(4)}</div>
-      <div class="inspector-label">Ux</div><div>${info.ux.toFixed(5)}</div>
-      <div class="inspector-label">Uy</div><div>${info.uy.toFixed(5)}</div>
-      <div class="inspector-label">Speed</div><div>${info.speed.toFixed(5)}</div>
-      <div class="inspector-label">Nx</div><div>${info.normalX.toFixed(4)}</div>
-      <div class="inspector-label">Ny</div><div>${info.normalY.toFixed(4)}</div>
+    ${renderDiagnosticsSummary(info)}
+    <div class="inspector-section">
+      <div class="inspector-section-title">Cell</div>
+      <div class="inspector-grid">
+        <div class="inspector-label">Cell</div><div>${info.x}, ${info.y}</div>
+        <div class="inspector-label">Type</div><div>${formatFlag(info.flag)}</div>
+        <div class="inspector-label">Fill</div><div>${info.fill.toFixed(3)}</div>
+        <div class="inspector-label">Mass</div><div>${info.mass.toFixed(4)}</div>
+        <div class="inspector-label">Rho</div><div>${info.rho.toFixed(4)}</div>
+        <div class="inspector-label">Ux</div><div>${info.ux.toFixed(5)}</div>
+        <div class="inspector-label">Uy</div><div>${info.uy.toFixed(5)}</div>
+        <div class="inspector-label">Speed</div><div>${info.speed.toFixed(5)}</div>
+        <div class="inspector-label">Nx</div><div>${info.normalX.toFixed(4)}</div>
+        <div class="inspector-label">Ny</div><div>${info.normalY.toFixed(4)}</div>
+      </div>
+    </div>
+    <div class="inspector-section">
+      <div class="inspector-section-title">Topology</div>
+      <div class="inspector-grid">
+        <div class="inspector-label">Touches Empty</div><div>${formatBoolean(info.touchesEmpty)}</div>
+        <div class="inspector-label">Touches Fluid</div><div>${formatBoolean(info.touchesFluid)}</div>
+        <div class="inspector-label">Touches Interface</div><div>${formatBoolean(info.touchesInterface)}</div>
+        <div class="inspector-label">Touches Solid</div><div>${formatBoolean(info.touchesSolid)}</div>
+        <div class="inspector-label">Liquid Neighbors</div><div>${info.liquidNeighborCount}</div>
+        <div class="inspector-label">Alternating Nbrs</div><div>${info.alternatingNeighborCount}</div>
+        <div class="inspector-label">I Without Fluid</div><div>${formatBoolean(info.interfaceWithoutFluid)}</div>
+        <div class="inspector-label">I Without Empty</div><div>${formatBoolean(info.interfaceWithoutEmpty)}</div>
+        <div class="inspector-label">Zebra Candidate</div><div>${formatBoolean(info.zebraCandidate)}</div>
+      </div>
     </div>
   `;
 };
@@ -247,6 +319,8 @@ const renderCurrentFrame = (dt: number) => {
   if (isChunkGridVisible) {
     renderChunkGrid();
   }
+
+  updateInspector();
 };
 
 const applyPendingGridSize = () => {
