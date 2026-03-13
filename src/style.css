@@ -1,11 +1,7 @@
 :root {
   color-scheme: light;
   font-family: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
-  background:
-    linear-gradient(180deg, #dce5ee 0, transparent 1px),
-    linear-gradient(90deg, #dce5ee 0, transparent 1px),
-    linear-gradient(180deg, #f4f7fa 0%, #eef2f6 100%);
-  background-size: 16px 16px, 16px 16px, auto;
+  background: linear-gradient(180deg, #f4f7fa 0%, #eef2f6 100%);
   color: #18212b;
 }
 
@@ -35,6 +31,7 @@ body {
   background: #0d1520;
   color: #d9e2ec;
   border-right: 1px solid #223042;
+  user-select: none;
 }
 
 .app-shell.is-collapsed {
@@ -100,7 +97,37 @@ body {
 }
 
 .workspace-view {
+  position: relative;
   min-height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  background:
+    linear-gradient(180deg, #dce5ee 0, transparent 1px),
+    linear-gradient(90deg, #dce5ee 0, transparent 1px),
+    transparent;
+  background-size: 16px 16px, 16px 16px, auto;
+}
+
+.workspace-view.is-panning {
+  cursor: grabbing;
+}
+
+.canvas-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.main-canvas {
+  display: block;
+  width: 200px;
+  height: 200px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #1d4ed8;
 }
 
 .inspector-panel {
@@ -116,6 +143,7 @@ body {
   background: rgba(241, 245, 249, 0.38);
   backdrop-filter: blur(2px);
   box-shadow: 0 -4px 16px rgba(24, 33, 43, 0.05);
+  user-select: none;
 }
 
 .inspector-panel.is-collapsed {
