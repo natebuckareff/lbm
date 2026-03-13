@@ -6,7 +6,7 @@ import {
 import { stepChunk, swapDistributionBuffers, updateFreeSurface } from "./lbm";
 import { renderState, type VisualizationMode } from "./render";
 import { createSimulationState } from "./state";
-import type { SimulationState } from "./types";
+import type { CellDebugInfo, CellFlag, SimulationState } from "./types";
 
 export type FrameBuffer = {
   height: number;
@@ -15,6 +15,7 @@ export type FrameBuffer = {
 };
 
 export type Simulation = {
+  inspectCell: (x: number, y: number) => CellDebugInfo | null;
   step: (
     dt: number,
     pixels: Uint8ClampedArray,
@@ -41,6 +42,36 @@ const iterateSimulation = (state: SimulationState) => {
   swapDistributionBuffers(state);
 };
 
+const inspectCell = (
+  state: SimulationState,
+  x: number,
+  y: number,
+): CellDebugInfo | null => {
+  const { fields, height, width } = state.domain;
+
+  if (x < 0 || x >= width || y < 0 || y >= height) {
+    return null;
+  }
+
+  const cellIndex = y * width + x;
+  const ux = fields.ux[cellIndex];
+  const uy = fields.uy[cellIndex];
+
+  return {
+    fill: fields.fill[cellIndex],
+    flag: fields.flags[cellIndex] as CellFlag,
+    mass: fields.mass[cellIndex],
+    normalX: fields.normalX[cellIndex],
+    normalY: fields.normalY[cellIndex],
+    rho: fields.rho[cellIndex],
+    speed: Math.sqrt(ux * ux + uy * uy),
+    ux,
+    uy,
+    x,
+    y,
+  };
+};
+
 export const createSimulation = (buffer: FrameBuffer): Simulation => {
   const state = createSimulationState({
     chunkSize: CHUNK_SIZE,
@@ -49,6 +80,9 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
   });
 
   return {
+    inspectCell(x, y) {
+      return inspectCell(state, x, y);
+    },
     step(dt, pixels, mode, tau, gravityMagnitude, rotationRadians) {
       state.runtime.tau = tau;
       state.runtime.gravityX = gravityMagnitude * Math.sin(rotationRadians);

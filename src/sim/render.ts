@@ -55,15 +55,15 @@ const WALL_COLOR = {
 };
 
 const DEBUG_INTERFACE_LOW = {
-  blue: 248,
-  green: 244,
-  red: 242,
+  blue: 255,
+  green: 255,
+  red: 255,
 };
 
 const DEBUG_INTERFACE_HIGH = {
-  blue: 250,
-  green: 189,
-  red: 92,
+  blue: 56,
+  green: 172,
+  red: 255,
 };
 
 const sampleSpeedPalette = (normalizedSpeed: number) => {
@@ -117,9 +117,9 @@ export const renderState = (
 
     if (mode === "debug") {
       if (flag === CELL_FLUID) {
-        pixels[pixelBase] = 24;
-        pixels[pixelBase + 1] = 119;
-        pixels[pixelBase + 2] = 242;
+        pixels[pixelBase] = 14;
+        pixels[pixelBase + 1] = 92;
+        pixels[pixelBase + 2] = 214;
         pixels[pixelBase + 3] = 255;
         continue;
       }

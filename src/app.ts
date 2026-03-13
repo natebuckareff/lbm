@@ -1,4 +1,9 @@
-import { animate, resetSimulation, stepAnimation } from "./animate";
+import {
+  animate,
+  inspectSimulationCell,
+  resetSimulation,
+  stepAnimation,
+} from "./animate";
 import {
   CHUNK_SIZE,
   DEFAULT_GRAVITY,
@@ -21,6 +26,7 @@ const panelToggle = document.querySelector<HTMLButtonElement>(".panel-toggle");
 const inspectorPanel = document.querySelector<HTMLElement>(".inspector-panel");
 const inspectorResizeHandle =
   document.querySelector<HTMLButtonElement>(".inspector-bar");
+const inspectorBody = document.querySelector<HTMLElement>(".inspector-body");
 const workspaceView = document.querySelector<HTMLElement>(".workspace-view");
 const canvasStage = document.querySelector<HTMLElement>(".canvas-stage");
 const mainCanvas = document.querySelector<HTMLCanvasElement>(".main-canvas");
@@ -58,6 +64,7 @@ if (
   !panelToggle ||
   !inspectorPanel ||
   !inspectorResizeHandle ||
+  !inspectorBody ||
   !workspaceView ||
   !canvasStage ||
   !mainCanvas ||
@@ -116,6 +123,8 @@ let tau = DEFAULT_TAU;
 let gravityMagnitude = DEFAULT_GRAVITY;
 let rotationDegrees = DEFAULT_ROTATION_DEGREES;
 let isChunkGridVisible = false;
+let hoveredCellX = -1;
+let hoveredCellY = -1;
 
 const setCanvasDimensions = (width: number, height: number) => {
   mainCanvas.width = width;
@@ -156,6 +165,54 @@ recreateFrameBuffer(DEFAULT_GRID_WIDTH, DEFAULT_GRID_HEIGHT);
 
 const presentPixels = () => {
   context.putImageData(pixelImage, 0, 0);
+};
+
+const formatFlag = (flag: number) => {
+  switch (flag) {
+    case 0:
+      return "fluid";
+    case 1:
+      return "solid";
+    case 2:
+      return "empty";
+    case 3:
+      return "interface";
+    default:
+      return `unknown (${flag})`;
+  }
+};
+
+const updateInspector = () => {
+  if (hoveredCellX < 0 || hoveredCellY < 0) {
+    inspectorBody.innerHTML = `
+      <div class="inspector-empty">Hover the simulation to inspect a cell.</div>
+    `;
+    return;
+  }
+
+  const info = inspectSimulationCell(animationBuffer, hoveredCellX, hoveredCellY);
+
+  if (info === null) {
+    inspectorBody.innerHTML = `
+      <div class="inspector-empty">Pointer is outside the simulation domain.</div>
+    `;
+    return;
+  }
+
+  inspectorBody.innerHTML = `
+    <div class="inspector-grid">
+      <div class="inspector-label">Cell</div><div>${info.x}, ${info.y}</div>
+      <div class="inspector-label">Type</div><div>${formatFlag(info.flag)}</div>
+      <div class="inspector-label">Fill</div><div>${info.fill.toFixed(3)}</div>
+      <div class="inspector-label">Mass</div><div>${info.mass.toFixed(4)}</div>
+      <div class="inspector-label">Rho</div><div>${info.rho.toFixed(4)}</div>
+      <div class="inspector-label">Ux</div><div>${info.ux.toFixed(5)}</div>
+      <div class="inspector-label">Uy</div><div>${info.uy.toFixed(5)}</div>
+      <div class="inspector-label">Speed</div><div>${info.speed.toFixed(5)}</div>
+      <div class="inspector-label">Nx</div><div>${info.normalX.toFixed(4)}</div>
+      <div class="inspector-label">Ny</div><div>${info.normalY.toFixed(4)}</div>
+    </div>
+  `;
 };
 
 const renderChunkGrid = () => {
@@ -217,6 +274,8 @@ const stepCurrentFrame = () => {
   if (isChunkGridVisible) {
     renderChunkGrid();
   }
+
+  updateInspector();
 };
 
 let isAnimationRunning = true;
@@ -289,6 +348,25 @@ const getTransformedCanvasMetrics = (scale: number) => {
     minX,
     minY,
     width: maxX - minX,
+  };
+};
+
+const getGridCoordinatesFromWorkspacePoint = (workspaceX: number, workspaceY: number) => {
+  const centerX = gridWidth * 0.5;
+  const centerY = gridHeight * 0.5;
+  const angle = getViewRotationRadians();
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const translatedX = workspaceX - canvasOffsetX - centerX;
+  const translatedY = workspaceY - canvasOffsetY - centerY;
+  const unrotatedX = translatedX * cos + translatedY * sin;
+  const unrotatedY = -translatedX * sin + translatedY * cos;
+  const gridX = centerX + unrotatedX / canvasScale;
+  const gridY = centerY + unrotatedY / canvasScale;
+
+  return {
+    x: Math.floor(gridX),
+    y: Math.floor(gridY),
   };
 };
 
@@ -582,6 +660,22 @@ workspaceView.addEventListener("pointerdown", (event) => {
   workspaceView.addEventListener("pointercancel", handlePointerEnd);
 });
 
+workspaceView.addEventListener("pointermove", (event) => {
+  const rect = workspaceView.getBoundingClientRect();
+  const localX = event.clientX - rect.left;
+  const localY = event.clientY - rect.top;
+  const gridCoordinates = getGridCoordinatesFromWorkspacePoint(localX, localY);
+  hoveredCellX = gridCoordinates.x;
+  hoveredCellY = gridCoordinates.y;
+  updateInspector();
+});
+
+workspaceView.addEventListener("pointerleave", () => {
+  hoveredCellX = -1;
+  hoveredCellY = -1;
+  updateInspector();
+});
+
 workspaceView.addEventListener("wheel", (event) => {
   event.preventDefault();
 
@@ -616,5 +710,6 @@ resizeObserver.observe(workspaceView);
 setCollapsed(false);
 setInspectorHeight(COLLAPSED_INSPECTOR_HEIGHT);
 resetCanvasView();
+updateInspector();
 renderCurrentFrame(0);
 requestAnimationFrame(frame);

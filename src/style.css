@@ -276,10 +276,33 @@ body {
 
 .inspector-body {
   min-height: 0;
+  padding: 0.5rem;
+  overflow: auto;
 }
 
 .inspector-panel.is-collapsed .inspector-body {
   display: none;
+}
+
+.inspector-empty {
+  color: rgba(24, 33, 43, 0.72);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.inspector-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  color: #18212b;
+}
+
+.inspector-label {
+  color: rgba(24, 33, 43, 0.66);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.68rem;
 }
 
 .app-shell.is-collapsed .side-panel h1,

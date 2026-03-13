@@ -1,5 +1,6 @@
 import { createSimulation, type FrameBuffer } from "./sim";
 import type { VisualizationMode } from "./sim/render";
+import type { CellDebugInfo } from "./sim/types";
 
 export type AnimationBuffer = {
   height: number;
@@ -74,4 +75,18 @@ export const stepAnimation = (
     options.gravityMagnitude,
     options.rotationRadians,
   );
+};
+
+export const inspectSimulationCell = (
+  buffer: AnimationBuffer,
+  x: number,
+  y: number,
+): CellDebugInfo | null => {
+  ensureSimulation(buffer);
+
+  if (simulation === null) {
+    throw new Error("Expected simulation to be initialized");
+  }
+
+  return simulation.inspectCell(x, y);
 };

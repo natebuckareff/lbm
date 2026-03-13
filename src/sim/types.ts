@@ -61,3 +61,17 @@ export type SimulationState = {
   domain: SimulationDomain;
   runtime: SimulationRuntime;
 };
+
+export type CellDebugInfo = {
+  fill: number;
+  flag: CellFlag;
+  mass: number;
+  normalX: number;
+  normalY: number;
+  rho: number;
+  speed: number;
+  ux: number;
+  uy: number;
+  x: number;
+  y: number;
+};
