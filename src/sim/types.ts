@@ -26,6 +26,7 @@ export type SimulationState = {
   height: number;
   nextDistributions: Float32Array;
   rho: Float32Array;
+  tau: number;
   ux: Float32Array;
   uy: Float32Array;
   width: number;

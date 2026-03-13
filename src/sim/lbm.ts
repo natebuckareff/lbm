@@ -2,7 +2,6 @@ import {
   DIRECTION_WEIGHTS,
   DIRECTIONS_X,
   DIRECTIONS_Y,
-  OMEGA,
   OPPOSITE_DIRECTIONS,
 } from "./constants";
 import { CELL_SOLID, type Chunk, type SimulationState } from "./types";
@@ -32,10 +31,12 @@ export const stepChunk = (state: SimulationState, chunk: Chunk) => {
     height,
     nextDistributions,
     rho,
+    tau,
     ux,
     uy,
     width,
   } = state;
+  const omega = 1 / tau;
 
   for (let localY = 0; localY < chunk.height; localY += 1) {
     const y = chunk.y + localY;
@@ -143,23 +144,23 @@ export const stepChunk = (state: SimulationState, chunk: Chunk) => {
       uy[cellIndex] = velocityY;
 
       nextDistributions[cellBase] =
-        f0 + OMEGA * (equilibrium(0, density, velocityX, velocityY) - f0);
+        f0 + omega * (equilibrium(0, density, velocityX, velocityY) - f0);
       nextDistributions[cellBase + 1] =
-        f1 + OMEGA * (equilibrium(1, density, velocityX, velocityY) - f1);
+        f1 + omega * (equilibrium(1, density, velocityX, velocityY) - f1);
       nextDistributions[cellBase + 2] =
-        f2 + OMEGA * (equilibrium(2, density, velocityX, velocityY) - f2);
+        f2 + omega * (equilibrium(2, density, velocityX, velocityY) - f2);
       nextDistributions[cellBase + 3] =
-        f3 + OMEGA * (equilibrium(3, density, velocityX, velocityY) - f3);
+        f3 + omega * (equilibrium(3, density, velocityX, velocityY) - f3);
       nextDistributions[cellBase + 4] =
-        f4 + OMEGA * (equilibrium(4, density, velocityX, velocityY) - f4);
+        f4 + omega * (equilibrium(4, density, velocityX, velocityY) - f4);
       nextDistributions[cellBase + 5] =
-        f5 + OMEGA * (equilibrium(5, density, velocityX, velocityY) - f5);
+        f5 + omega * (equilibrium(5, density, velocityX, velocityY) - f5);
       nextDistributions[cellBase + 6] =
-        f6 + OMEGA * (equilibrium(6, density, velocityX, velocityY) - f6);
+        f6 + omega * (equilibrium(6, density, velocityX, velocityY) - f6);
       nextDistributions[cellBase + 7] =
-        f7 + OMEGA * (equilibrium(7, density, velocityX, velocityY) - f7);
+        f7 + omega * (equilibrium(7, density, velocityX, velocityY) - f7);
       nextDistributions[cellBase + 8] =
-        f8 + OMEGA * (equilibrium(8, density, velocityX, velocityY) - f8);
+        f8 + omega * (equilibrium(8, density, velocityX, velocityY) - f8);
     }
   }
 };

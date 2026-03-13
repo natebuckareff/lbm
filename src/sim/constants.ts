@@ -1,7 +1,8 @@
 export const CHUNK_SIZE = 32;
 export const DIRECTION_COUNT = 9;
-export const TAU = 0.9;
-export const OMEGA = 1 / TAU;
+export const DEFAULT_TAU = 0.9;
+export const MIN_TAU = 0.5;
+export const MAX_TAU = 2;
 export const INITIAL_DENSITY = 1;
 export const INITIAL_VELOCITY_X = 0.025;
 export const INITIAL_VELOCITY_Y = 0;

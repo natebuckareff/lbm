@@ -139,9 +139,32 @@ body {
   font-size: 0.7rem;
 }
 
+.side-number {
+  width: 100%;
+  min-height: 24px;
+  border: 1px solid #304255;
+  background: #152233;
+  color: #d9e2ec;
+  padding: 0 0.45rem;
+  font: inherit;
+  font-size: 0.7rem;
+}
+
+.side-number:focus-visible,
 .side-select:focus-visible {
   outline: 1px solid #7fb3ff;
   outline-offset: 1px;
+}
+
+.side-range {
+  width: 100%;
+  margin: 0;
+}
+
+.side-field-value {
+  color: #99a9bb;
+  font-size: 0.68rem;
+  text-align: right;
 }
 
 .side-checkbox {

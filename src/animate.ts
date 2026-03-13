@@ -8,12 +8,19 @@ export type AnimationBuffer = {
 };
 
 export type AnimationOptions = {
+  tau: number;
   visualizationMode: VisualizationMode;
 };
 
 let simulation: ReturnType<typeof createSimulation> | null = null;
 let simulationWidth = 0;
 let simulationHeight = 0;
+
+export const resetSimulation = () => {
+  simulation = null;
+  simulationWidth = 0;
+  simulationHeight = 0;
+};
 
 const ensureSimulation = (buffer: FrameBuffer) => {
   if (
@@ -38,5 +45,5 @@ export const animate = (
     throw new Error("Expected simulation to be initialized");
   }
 
-  simulation.step(dt, buffer.pixels, options.visualizationMode);
+  simulation.step(dt, buffer.pixels, options.visualizationMode, options.tau);
 };

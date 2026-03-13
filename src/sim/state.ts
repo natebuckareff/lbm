@@ -1,4 +1,5 @@
 import {
+  DEFAULT_TAU,
   DIRECTION_COUNT,
   INITIAL_DENSITY,
   INITIAL_VELOCITY_X,
@@ -91,6 +92,7 @@ export const createSimulationState = (
     height,
     nextDistributions,
     rho,
+    tau: DEFAULT_TAU,
     ux,
     uy,
     width,

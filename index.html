@@ -25,14 +25,49 @@
           <div id="side-panel-body" class="side-panel-body">
             <p>This area is ready for navigation, controls, or status content.</p>
             <div class="control-group">
-              <button class="side-button animation-toggle" type="button">Resume</button>
+              <button class="side-button animation-toggle" type="button">Pause</button>
+              <button class="side-button simulation-reset" type="button">Reset Simulation</button>
               <button class="side-button view-reset" type="button">Reset View</button>
+              <label class="side-field">
+                <span class="side-field-label">Grid Width</span>
+                <input
+                  class="side-number grid-width-input"
+                  type="number"
+                  min="32"
+                  max="1024"
+                  step="32"
+                  value="128"
+                >
+              </label>
+              <label class="side-field">
+                <span class="side-field-label">Grid Height</span>
+                <input
+                  class="side-number grid-height-input"
+                  type="number"
+                  min="32"
+                  max="1024"
+                  step="32"
+                  value="128"
+                >
+              </label>
               <label class="side-field">
                 <span class="side-field-label">Visualize</span>
                 <select class="side-select visualization-mode">
                   <option value="speed">Velocity</option>
                   <option value="density">Density</option>
                 </select>
+              </label>
+              <label class="side-field">
+                <span class="side-field-label">Tau</span>
+                <input
+                  class="side-range tau-slider"
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.01"
+                  value="0.9"
+                >
+                <span class="side-field-value tau-value">0.90</span>
               </label>
               <label class="side-checkbox">
                 <input class="chunk-grid-toggle" type="checkbox">

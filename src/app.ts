@@ -1,5 +1,5 @@
-import { animate } from "./animate";
-import { CHUNK_SIZE } from "./sim/constants";
+import { animate, resetSimulation } from "./animate";
+import { CHUNK_SIZE, DEFAULT_TAU, MAX_TAU, MIN_TAU } from "./sim/constants";
 import type { VisualizationMode } from "./sim/render";
 
 const appRoot = document.querySelector<HTMLDivElement>("#app");
@@ -15,10 +15,18 @@ const canvasStage = document.querySelector<HTMLElement>(".canvas-stage");
 const mainCanvas = document.querySelector<HTMLCanvasElement>(".main-canvas");
 const animationToggleButton =
   document.querySelector<HTMLButtonElement>(".animation-toggle");
+const simulationResetButton =
+  document.querySelector<HTMLButtonElement>(".simulation-reset");
 const viewResetButton =
   document.querySelector<HTMLButtonElement>(".view-reset");
+const gridWidthInput =
+  document.querySelector<HTMLInputElement>(".grid-width-input");
+const gridHeightInput =
+  document.querySelector<HTMLInputElement>(".grid-height-input");
 const visualizationModeSelect =
   document.querySelector<HTMLSelectElement>(".visualization-mode");
+const tauSlider = document.querySelector<HTMLInputElement>(".tau-slider");
+const tauValue = document.querySelector<HTMLElement>(".tau-value");
 const chunkGridToggle =
   document.querySelector<HTMLInputElement>(".chunk-grid-toggle");
 
@@ -37,24 +45,26 @@ if (
   !canvasStage ||
   !mainCanvas ||
   !animationToggleButton ||
+  !simulationResetButton ||
   !viewResetButton ||
+  !gridWidthInput ||
+  !gridHeightInput ||
   !visualizationModeSelect ||
+  !tauSlider ||
+  !tauValue ||
   !chunkGridToggle
 ) {
   throw new Error("Expected app layout elements in index.html");
 }
 
-const CANVAS_WIDTH = 128;
-const CANVAS_HEIGHT = 128;
+const DEFAULT_GRID_WIDTH = 256;
+const DEFAULT_GRID_HEIGHT = 256;
+const MIN_GRID_SIZE = 32;
+const MAX_GRID_SIZE = 1024;
 const MIN_CANVAS_SCALE = 0.25;
 const MAX_CANVAS_SCALE = 32;
 const ZOOM_STEP = 0.0015;
 const CANVAS_FIT_HORIZONTAL_PADDING = 32;
-
-mainCanvas.width = CANVAS_WIDTH;
-mainCanvas.height = CANVAS_HEIGHT;
-mainCanvas.style.width = `${CANVAS_WIDTH}px`;
-mainCanvas.style.height = `${CANVAS_HEIGHT}px`;
 
 const context = mainCanvas.getContext("2d");
 
@@ -64,15 +74,61 @@ if (!context) {
 
 context.imageSmoothingEnabled = false;
 
-const pixelBytes = new Uint8ClampedArray(CANVAS_WIDTH * CANVAS_HEIGHT * 4);
-const pixelImage = new ImageData(pixelBytes, CANVAS_WIDTH, CANVAS_HEIGHT);
-const animationBuffer = {
-  height: CANVAS_HEIGHT,
+type MutableAnimationBuffer = {
+  height: number;
+  pixels: Uint8ClampedArray;
+  width: number;
+};
+
+let gridWidth = DEFAULT_GRID_WIDTH;
+let gridHeight = DEFAULT_GRID_HEIGHT;
+let pixelBytes = new Uint8ClampedArray(gridWidth * gridHeight * 4);
+let pixelImage = new ImageData(pixelBytes, gridWidth, gridHeight);
+let animationBuffer: MutableAnimationBuffer = {
+  height: gridHeight,
   pixels: pixelBytes,
-  width: CANVAS_WIDTH,
+  width: gridWidth,
 };
 let visualizationMode: VisualizationMode = "speed";
+let tau = DEFAULT_TAU;
 let isChunkGridVisible = false;
+
+const setCanvasDimensions = (width: number, height: number) => {
+  mainCanvas.width = width;
+  mainCanvas.height = height;
+  mainCanvas.style.width = `${width}px`;
+  mainCanvas.style.height = `${height}px`;
+};
+
+const recreateFrameBuffer = (width: number, height: number) => {
+  gridWidth = width;
+  gridHeight = height;
+  pixelBytes = new Uint8ClampedArray(width * height * 4);
+  pixelImage = new ImageData(pixelBytes, width, height);
+  animationBuffer = {
+    height,
+    pixels: pixelBytes,
+    width,
+  };
+  setCanvasDimensions(width, height);
+};
+
+const clampGridSize = (value: number) => {
+  const clamped = Math.max(MIN_GRID_SIZE, Math.min(MAX_GRID_SIZE, value));
+  return Math.round(clamped / CHUNK_SIZE) * CHUNK_SIZE;
+};
+
+gridWidthInput.min = String(MIN_GRID_SIZE);
+gridWidthInput.max = String(MAX_GRID_SIZE);
+gridWidthInput.step = String(CHUNK_SIZE);
+gridWidthInput.value = String(DEFAULT_GRID_WIDTH);
+
+gridHeightInput.min = String(MIN_GRID_SIZE);
+gridHeightInput.max = String(MAX_GRID_SIZE);
+gridHeightInput.step = String(CHUNK_SIZE);
+gridHeightInput.value = String(DEFAULT_GRID_HEIGHT);
+
+recreateFrameBuffer(DEFAULT_GRID_WIDTH, DEFAULT_GRID_HEIGHT);
 
 const presentPixels = () => {
   context.putImageData(pixelImage, 0, 0);
@@ -84,14 +140,14 @@ const renderChunkGrid = () => {
   context.lineWidth = 1;
   context.beginPath();
 
-  for (let x = CHUNK_SIZE; x < CANVAS_WIDTH; x += CHUNK_SIZE) {
+  for (let x = CHUNK_SIZE; x < gridWidth; x += CHUNK_SIZE) {
     context.moveTo(x + 0.5, 0);
-    context.lineTo(x + 0.5, CANVAS_HEIGHT);
+    context.lineTo(x + 0.5, gridHeight);
   }
 
-  for (let y = CHUNK_SIZE; y < CANVAS_HEIGHT; y += CHUNK_SIZE) {
+  for (let y = CHUNK_SIZE; y < gridHeight; y += CHUNK_SIZE) {
     context.moveTo(0, y + 0.5);
-    context.lineTo(CANVAS_WIDTH, y + 0.5);
+    context.lineTo(gridWidth, y + 0.5);
   }
 
   context.stroke();
@@ -99,7 +155,7 @@ const renderChunkGrid = () => {
 };
 
 const renderCurrentFrame = (dt: number) => {
-  animate(animationBuffer, dt, { visualizationMode });
+  animate(animationBuffer, dt, { tau, visualizationMode });
   presentPixels();
 
   if (isChunkGridVisible) {
@@ -107,7 +163,20 @@ const renderCurrentFrame = (dt: number) => {
   }
 };
 
-let isAnimationRunning = false;
+const applyPendingGridSize = () => {
+  const nextWidth = clampGridSize(Number.parseInt(gridWidthInput.value, 10));
+  const nextHeight = clampGridSize(Number.parseInt(gridHeightInput.value, 10));
+
+  gridWidthInput.value = String(nextWidth);
+  gridHeightInput.value = String(nextHeight);
+
+  recreateFrameBuffer(nextWidth, nextHeight);
+  resetSimulation();
+  renderCurrentFrame(0);
+  resetCanvasView();
+};
+
+let isAnimationRunning = true;
 let lastFrameTime = performance.now();
 
 const frame = (now: number) => {
@@ -141,8 +210,8 @@ const clampCanvasScale = (scale: number) => {
 };
 
 const centerCanvasInWorkspace = (scale: number) => {
-  const x = (workspaceView.clientWidth - CANVAS_WIDTH * scale) * 0.5;
-  const y = (workspaceView.clientHeight - CANVAS_HEIGHT * scale) * 0.5;
+  const x = (workspaceView.clientWidth - gridWidth * scale) * 0.5;
+  const y = (workspaceView.clientHeight - gridHeight * scale) * 0.5;
   setCanvasTransform(x, y, scale);
 };
 
@@ -156,7 +225,7 @@ const getCanvasWidthFitScale = () => {
     return MIN_CANVAS_SCALE;
   }
 
-  return clampCanvasScale(availableWidth / CANVAS_WIDTH);
+  return clampCanvasScale(availableWidth / gridWidth);
 };
 
 const resetCanvasView = () => {
@@ -179,6 +248,10 @@ animationToggleButton.addEventListener("click", () => {
   animationToggleButton.textContent = isAnimationRunning ? "Pause" : "Resume";
 });
 
+simulationResetButton.addEventListener("click", () => {
+  applyPendingGridSize();
+});
+
 viewResetButton.addEventListener("click", () => {
   resetCanvasView();
 });
@@ -190,6 +263,26 @@ visualizationModeSelect.addEventListener("change", () => {
     visualizationMode = nextMode;
     renderCurrentFrame(0);
   }
+});
+
+const formatTau = (value: number) => value.toFixed(2);
+
+tauSlider.min = String(MIN_TAU);
+tauSlider.max = String(MAX_TAU);
+tauSlider.step = "0.01";
+tauSlider.value = String(DEFAULT_TAU);
+tauValue.textContent = formatTau(DEFAULT_TAU);
+
+tauSlider.addEventListener("input", () => {
+  const nextTau = Number.parseFloat(tauSlider.value);
+
+  if (!Number.isFinite(nextTau)) {
+    return;
+  }
+
+  tau = Math.max(MIN_TAU, Math.min(MAX_TAU, nextTau));
+  tauValue.textContent = formatTau(tau);
+  renderCurrentFrame(0);
 });
 
 chunkGridToggle.addEventListener("change", () => {
@@ -360,4 +453,5 @@ resizeObserver.observe(workspaceView);
 setCollapsed(false);
 setInspectorHeight(COLLAPSED_INSPECTOR_HEIGHT);
 resetCanvasView();
+renderCurrentFrame(0);
 requestAnimationFrame(frame);

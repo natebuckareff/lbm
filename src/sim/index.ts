@@ -19,6 +19,7 @@ export type Simulation = {
     dt: number,
     pixels: Uint8ClampedArray,
     mode: VisualizationMode,
+    tau: number,
   ) => void;
 };
 
@@ -38,7 +39,8 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
   });
 
   return {
-    step(dt, pixels, mode) {
+    step(dt, pixels, mode, tau) {
+      state.tau = tau;
       state.accumulator += dt * STEPS_PER_SECOND;
 
       let steps = 0;
@@ -46,11 +48,6 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
         iterateSimulation(state);
         state.accumulator -= 1;
         steps += 1;
-      }
-
-      if (steps === 0) {
-        iterateSimulation(state);
-        state.accumulator = 0;
       }
 
       renderState(state, pixels, mode);
