@@ -27,10 +27,13 @@ export type LatticeFields = {
   fill: Float32Array;
   flags: Uint8Array;
   mass: Float32Array;
+  normalX: Float32Array;
+  normalY: Float32Array;
   nextDistributions: Float32Array;
   nextFill: Float32Array;
   nextFlags: Uint8Array;
   nextMass: Float32Array;
+  postDistributions: Float32Array;
   rho: Float32Array;
   ux: Float32Array;
   uy: Float32Array;
@@ -50,6 +53,7 @@ export type SimulationRuntime = {
   accumulator: number;
   gravityX: number;
   gravityY: number;
+  liquidMassTarget: number;
   tau: number;
 };
 

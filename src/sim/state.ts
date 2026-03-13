@@ -20,7 +20,7 @@ import {
 
 const seedObstacle = (flags: Uint8Array, width: number, height: number) => {
   const centerX = Math.floor(width * 0.35);
-  const centerY = Math.floor(height * 0.5);
+  const centerY = Math.floor(height * 0.68);
   const radius = Math.max(18, Math.floor(Math.min(width, height) * 0.08));
   const radiusSquared = radius * radius;
 
@@ -58,10 +58,13 @@ export const createSimulationState = (
   const nextFlags = new Uint8Array(cellCount);
   const currentDistributions = new Float32Array(distributionCount);
   const nextDistributions = new Float32Array(distributionCount);
+  const postDistributions = new Float32Array(distributionCount);
   const fill = new Float32Array(cellCount);
   const nextFill = new Float32Array(cellCount);
   const mass = new Float32Array(cellCount);
   const nextMass = new Float32Array(cellCount);
+  const normalX = new Float32Array(cellCount);
+  const normalY = new Float32Array(cellCount);
   const rho = new Float32Array(cellCount);
   const ux = new Float32Array(cellCount);
   const uy = new Float32Array(cellCount);
@@ -99,7 +102,7 @@ export const createSimulationState = (
     }
 
     flags[cellIndex] = cellFlag;
-    rho[cellIndex] = density;
+    rho[cellIndex] = cellFlag === CELL_EMPTY ? ATMOSPHERIC_DENSITY : density;
     ux[cellIndex] = INITIAL_VELOCITY_X;
     uy[cellIndex] = INITIAL_VELOCITY_Y;
     fill[cellIndex] = cellFill;
@@ -118,6 +121,7 @@ export const createSimulationState = (
       );
       currentDistributions[base + direction] = value;
       nextDistributions[base + direction] = value;
+      postDistributions[base + direction] = value;
     }
   }
 
@@ -136,10 +140,13 @@ export const createSimulationState = (
         fill,
         flags,
         mass,
+        normalX,
+        normalY,
         nextDistributions,
         nextFill,
         nextFlags,
         nextMass,
+        postDistributions,
         rho,
         ux,
         uy,
@@ -151,6 +158,7 @@ export const createSimulationState = (
       accumulator: 0,
       gravityX: 0,
       gravityY: 0,
+      liquidMassTarget: mass.reduce((sum, value) => sum + value, 0),
       tau: DEFAULT_TAU,
     },
   };
