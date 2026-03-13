@@ -107,7 +107,7 @@ const centerCanvasInWorkspace = () => {
 };
 
 const resetCanvasView = () => {
-  canvasScale = 1;
+  canvasScale = 4;
   centerCanvasInWorkspace();
 };
 
