@@ -6,7 +6,7 @@ import {
   INITIAL_VELOCITY_Y,
 } from "./constants";
 import { createChunks } from "./chunks";
-import { equilibrium } from "./lbm";
+import { equilibrium } from "./lattice";
 import { CELL_FLUID, CELL_SOLID, type SimulationConfig, type SimulationState } from "./types";
 
 const seedObstacle = (flags: Uint8Array, width: number, height: number) => {
@@ -83,18 +83,25 @@ export const createSimulationState = (
   }
 
   return {
-    accumulator: 0,
-    chunkCountX: Math.ceil(width / chunkSize),
-    chunkCountY: Math.ceil(height / chunkSize),
-    chunks: createChunks(width, height, chunkSize),
-    currentDistributions,
-    flags,
-    height,
-    nextDistributions,
-    rho,
-    tau: DEFAULT_TAU,
-    ux,
-    uy,
-    width,
+    domain: {
+      chunkCountX: Math.ceil(width / chunkSize),
+      chunkCountY: Math.ceil(height / chunkSize),
+      chunks: createChunks(width, height, chunkSize),
+      chunkSize,
+      fields: {
+        currentDistributions,
+        flags,
+        nextDistributions,
+        rho,
+        ux,
+        uy,
+      },
+      height,
+      width,
+    },
+    runtime: {
+      accumulator: 0,
+      tau: DEFAULT_TAU,
+    },
   };
 };

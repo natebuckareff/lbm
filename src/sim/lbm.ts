@@ -1,42 +1,136 @@
 import {
-  DIRECTION_WEIGHTS,
+  DIRECTION_COUNT,
   DIRECTIONS_X,
   DIRECTIONS_Y,
   OPPOSITE_DIRECTIONS,
 } from "./constants";
-import { CELL_SOLID, type Chunk, type SimulationState } from "./types";
+import {
+  computeDensity,
+  computeVelocityX,
+  computeVelocityY,
+  equilibrium,
+} from "./lattice";
+import {
+  CELL_FLUID,
+  CELL_SOLID,
+  type Chunk,
+  type LatticeFields,
+  type SimulationState,
+} from "./types";
 
-export const equilibrium = (
-  direction: number,
+const clearCell = (
+  fields: LatticeFields,
+  cellIndex: number,
+  cellBase: number,
+) => {
+  fields.rho[cellIndex] = 0;
+  fields.ux[cellIndex] = 0;
+  fields.uy[cellIndex] = 0;
+
+  for (let direction = 0; direction < DIRECTION_COUNT; direction += 1) {
+    fields.nextDistributions[cellBase + direction] = 0;
+  }
+};
+
+const readPulledPopulations = (
+  fields: LatticeFields,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  cellBase: number,
+  populations: Float32Array,
+) => {
+  const { currentDistributions, flags } = fields;
+
+  for (let direction = 0; direction < DIRECTION_COUNT; direction += 1) {
+    const sourceX = x - DIRECTIONS_X[direction];
+    const sourceY = y - DIRECTIONS_Y[direction];
+
+    if (sourceX < 0 || sourceX >= width || sourceY < 0 || sourceY >= height) {
+      populations[direction] =
+        currentDistributions[cellBase + OPPOSITE_DIRECTIONS[direction]];
+      continue;
+    }
+
+    const sourceIndex = sourceY * width + sourceX;
+
+    if (flags[sourceIndex] === CELL_SOLID) {
+      populations[direction] =
+        currentDistributions[cellBase + OPPOSITE_DIRECTIONS[direction]];
+      continue;
+    }
+
+    populations[direction] = currentDistributions[sourceIndex * DIRECTION_COUNT + direction];
+  }
+};
+
+const writeMacroscopicFields = (
+  fields: LatticeFields,
+  cellIndex: number,
   density: number,
   velocityX: number,
   velocityY: number,
 ) => {
-  const cx = DIRECTIONS_X[direction];
-  const cy = DIRECTIONS_Y[direction];
-  const velocityDot = cx * velocityX + cy * velocityY;
-  const speedSquared = velocityX * velocityX + velocityY * velocityY;
+  fields.rho[cellIndex] = density;
+  fields.ux[cellIndex] = velocityX;
+  fields.uy[cellIndex] = velocityY;
+};
 
-  return (
-    DIRECTION_WEIGHTS[direction] *
-    density *
-    (1 + 3 * velocityDot + 4.5 * velocityDot * velocityDot - 1.5 * speedSquared)
-  );
+const collideBgk = (
+  fields: LatticeFields,
+  cellBase: number,
+  density: number,
+  velocityX: number,
+  velocityY: number,
+  omega: number,
+  populations: Float32Array,
+) => {
+  for (let direction = 0; direction < DIRECTION_COUNT; direction += 1) {
+    const streamedValue = populations[direction];
+    fields.nextDistributions[cellBase + direction] =
+      streamedValue +
+      omega * (equilibrium(direction, density, velocityX, velocityY) - streamedValue);
+  }
+};
+
+const stepFluidCell = (
+  fields: LatticeFields,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  cellIndex: number,
+  omega: number,
+  populations: Float32Array,
+) => {
+  const cellBase = cellIndex * DIRECTION_COUNT;
+
+  readPulledPopulations(fields, width, height, x, y, cellBase, populations);
+
+  const density = computeDensity(populations);
+  const safeDensity = density > 1e-6 ? density : 1e-6;
+  const velocityX = computeVelocityX(populations, safeDensity);
+  const velocityY = computeVelocityY(populations, safeDensity);
+
+  if (
+    !Number.isFinite(density) ||
+    !Number.isFinite(velocityX) ||
+    !Number.isFinite(velocityY)
+  ) {
+    clearCell(fields, cellIndex, cellBase);
+    return;
+  }
+
+  writeMacroscopicFields(fields, cellIndex, density, velocityX, velocityY);
+  collideBgk(fields, cellBase, density, velocityX, velocityY, omega, populations);
 };
 
 export const stepChunk = (state: SimulationState, chunk: Chunk) => {
-  const {
-    currentDistributions,
-    flags,
-    height,
-    nextDistributions,
-    rho,
-    tau,
-    ux,
-    uy,
-    width,
-  } = state;
-  const omega = 1 / tau;
+  const { fields, height, width } = state.domain;
+  const { flags } = fields;
+  const omega = 1 / state.runtime.tau;
+  const populations = new Float32Array(DIRECTION_COUNT);
 
   for (let localY = 0; localY < chunk.height; localY += 1) {
     const y = chunk.y + localY;
@@ -44,129 +138,20 @@ export const stepChunk = (state: SimulationState, chunk: Chunk) => {
     for (let localX = 0; localX < chunk.width; localX += 1) {
       const x = chunk.x + localX;
       const cellIndex = y * width + x;
-      const cellBase = cellIndex * 9;
+      const cellBase = cellIndex * DIRECTION_COUNT;
 
-      if (flags[cellIndex] === CELL_SOLID) {
-        rho[cellIndex] = 0;
-        ux[cellIndex] = 0;
-        uy[cellIndex] = 0;
-
-        for (let direction = 0; direction < 9; direction += 1) {
-          nextDistributions[cellBase + direction] = 0;
-        }
+      if (flags[cellIndex] !== CELL_FLUID) {
+        clearCell(fields, cellIndex, cellBase);
         continue;
       }
 
-      let f0 = 0;
-      let f1 = 0;
-      let f2 = 0;
-      let f3 = 0;
-      let f4 = 0;
-      let f5 = 0;
-      let f6 = 0;
-      let f7 = 0;
-      let f8 = 0;
-
-      for (let direction = 0; direction < 9; direction += 1) {
-        let streamedValue = 0;
-        const sourceX = x - DIRECTIONS_X[direction];
-        const sourceY = y - DIRECTIONS_Y[direction];
-
-        if (sourceX < 0 || sourceX >= width || sourceY < 0 || sourceY >= height) {
-          streamedValue =
-            currentDistributions[cellBase + OPPOSITE_DIRECTIONS[direction]];
-        } else {
-          const sourceIndex = sourceY * width + sourceX;
-
-          if (flags[sourceIndex] === CELL_SOLID) {
-            streamedValue =
-              currentDistributions[cellBase + OPPOSITE_DIRECTIONS[direction]];
-          } else {
-            streamedValue = currentDistributions[sourceIndex * 9 + direction];
-          }
-        }
-
-        switch (direction) {
-          case 0:
-            f0 = streamedValue;
-            break;
-          case 1:
-            f1 = streamedValue;
-            break;
-          case 2:
-            f2 = streamedValue;
-            break;
-          case 3:
-            f3 = streamedValue;
-            break;
-          case 4:
-            f4 = streamedValue;
-            break;
-          case 5:
-            f5 = streamedValue;
-            break;
-          case 6:
-            f6 = streamedValue;
-            break;
-          case 7:
-            f7 = streamedValue;
-            break;
-          case 8:
-            f8 = streamedValue;
-            break;
-        }
-      }
-
-      const density = f0 + f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8;
-      const safeDensity = density > 1e-6 ? density : 1e-6;
-      const momentumX = f1 - f3 + f5 - f6 - f7 + f8;
-      const momentumY = f2 - f4 + f5 + f6 - f7 - f8;
-      const velocityX = momentumX / safeDensity;
-      const velocityY = momentumY / safeDensity;
-
-      if (
-        !Number.isFinite(density) ||
-        !Number.isFinite(velocityX) ||
-        !Number.isFinite(velocityY)
-      ) {
-        rho[cellIndex] = 0;
-        ux[cellIndex] = 0;
-        uy[cellIndex] = 0;
-
-        for (let direction = 0; direction < 9; direction += 1) {
-          nextDistributions[cellBase + direction] = 0;
-        }
-        continue;
-      }
-
-      rho[cellIndex] = density;
-      ux[cellIndex] = velocityX;
-      uy[cellIndex] = velocityY;
-
-      nextDistributions[cellBase] =
-        f0 + omega * (equilibrium(0, density, velocityX, velocityY) - f0);
-      nextDistributions[cellBase + 1] =
-        f1 + omega * (equilibrium(1, density, velocityX, velocityY) - f1);
-      nextDistributions[cellBase + 2] =
-        f2 + omega * (equilibrium(2, density, velocityX, velocityY) - f2);
-      nextDistributions[cellBase + 3] =
-        f3 + omega * (equilibrium(3, density, velocityX, velocityY) - f3);
-      nextDistributions[cellBase + 4] =
-        f4 + omega * (equilibrium(4, density, velocityX, velocityY) - f4);
-      nextDistributions[cellBase + 5] =
-        f5 + omega * (equilibrium(5, density, velocityX, velocityY) - f5);
-      nextDistributions[cellBase + 6] =
-        f6 + omega * (equilibrium(6, density, velocityX, velocityY) - f6);
-      nextDistributions[cellBase + 7] =
-        f7 + omega * (equilibrium(7, density, velocityX, velocityY) - f7);
-      nextDistributions[cellBase + 8] =
-        f8 + omega * (equilibrium(8, density, velocityX, velocityY) - f8);
+      stepFluidCell(fields, width, height, x, y, cellIndex, omega, populations);
     }
   }
 };
 
 export const swapDistributionBuffers = (state: SimulationState) => {
-  const previousCurrent = state.currentDistributions;
-  state.currentDistributions = state.nextDistributions;
-  state.nextDistributions = previousCurrent;
+  const previousCurrent = state.domain.fields.currentDistributions;
+  state.domain.fields.currentDistributions = state.domain.fields.nextDistributions;
+  state.domain.fields.nextDistributions = previousCurrent;
 };

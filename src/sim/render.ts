@@ -43,7 +43,7 @@ export const renderState = (
   pixels: Uint8ClampedArray,
   mode: VisualizationMode,
 ) => {
-  const { flags, rho, ux, uy } = state;
+  const { flags, rho, ux, uy } = state.domain.fields;
 
   for (let cellIndex = 0; cellIndex < flags.length; cellIndex += 1) {
     const pixelBase = cellIndex * 4;

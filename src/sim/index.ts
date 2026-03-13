@@ -24,7 +24,7 @@ export type Simulation = {
 };
 
 const iterateSimulation = (state: SimulationState) => {
-  for (const chunk of state.chunks) {
+  for (const chunk of state.domain.chunks) {
     stepChunk(state, chunk);
   }
 
@@ -40,13 +40,13 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
 
   return {
     step(dt, pixels, mode, tau) {
-      state.tau = tau;
-      state.accumulator += dt * STEPS_PER_SECOND;
+      state.runtime.tau = tau;
+      state.runtime.accumulator += dt * STEPS_PER_SECOND;
 
       let steps = 0;
-      while (state.accumulator >= 1 && steps < MAX_STEPS_PER_FRAME) {
+      while (state.runtime.accumulator >= 1 && steps < MAX_STEPS_PER_FRAME) {
         iterateSimulation(state);
-        state.accumulator -= 1;
+        state.runtime.accumulator -= 1;
         steps += 1;
       }
 

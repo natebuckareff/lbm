@@ -1,7 +1,13 @@
 export const CELL_FLUID = 0;
 export const CELL_SOLID = 1;
+export const CELL_EMPTY = 2;
+export const CELL_INTERFACE = 3;
 
-export type CellFlag = typeof CELL_FLUID | typeof CELL_SOLID;
+export type CellFlag =
+  | typeof CELL_FLUID
+  | typeof CELL_SOLID
+  | typeof CELL_EMPTY
+  | typeof CELL_INTERFACE;
 
 export type Chunk = {
   height: number;
@@ -16,18 +22,31 @@ export type SimulationConfig = {
   width: number;
 };
 
-export type SimulationState = {
-  accumulator: number;
+export type LatticeFields = {
+  currentDistributions: Float32Array;
+  flags: Uint8Array;
+  nextDistributions: Float32Array;
+  rho: Float32Array;
+  ux: Float32Array;
+  uy: Float32Array;
+};
+
+export type SimulationDomain = {
   chunkCountX: number;
   chunkCountY: number;
   chunks: Chunk[];
-  currentDistributions: Float32Array;
-  flags: Uint8Array;
+  chunkSize: number;
+  fields: LatticeFields;
   height: number;
-  nextDistributions: Float32Array;
-  rho: Float32Array;
-  tau: number;
-  ux: Float32Array;
-  uy: Float32Array;
   width: number;
+};
+
+export type SimulationRuntime = {
+  accumulator: number;
+  tau: number;
+};
+
+export type SimulationState = {
+  domain: SimulationDomain;
+  runtime: SimulationRuntime;
 };
