@@ -41,6 +41,7 @@ const CANVAS_HEIGHT = 512;
 const MIN_CANVAS_SCALE = 0.25;
 const MAX_CANVAS_SCALE = 32;
 const ZOOM_STEP = 0.0015;
+const CANVAS_FIT_HORIZONTAL_PADDING = 32;
 
 mainCanvas.width = CANVAS_WIDTH;
 mainCanvas.height = CANVAS_HEIGHT;
@@ -84,6 +85,7 @@ const frame = (now: number) => {
 let canvasOffsetX = 0;
 let canvasOffsetY = 0;
 let canvasScale = 1;
+let isCanvasAutoFit = true;
 
 const renderCanvasTransform = () => {
   canvasStage.style.transform = `translate(${canvasOffsetX}px, ${canvasOffsetY}px) scale(${canvasScale})`;
@@ -100,15 +102,28 @@ const clampCanvasScale = (scale: number) => {
   return Math.max(MIN_CANVAS_SCALE, Math.min(scale, MAX_CANVAS_SCALE));
 };
 
-const centerCanvasInWorkspace = () => {
-  const x = (workspaceView.clientWidth - CANVAS_WIDTH * canvasScale) * 0.5;
-  const y = (workspaceView.clientHeight - CANVAS_HEIGHT * canvasScale) * 0.5;
-  setCanvasTransform(x, y, canvasScale);
+const centerCanvasInWorkspace = (scale: number) => {
+  const x = (workspaceView.clientWidth - CANVAS_WIDTH * scale) * 0.5;
+  const y = (workspaceView.clientHeight - CANVAS_HEIGHT * scale) * 0.5;
+  setCanvasTransform(x, y, scale);
+};
+
+const getCanvasWidthFitScale = () => {
+  const availableWidth = Math.max(
+    workspaceView.clientWidth - CANVAS_FIT_HORIZONTAL_PADDING * 2,
+    0,
+  );
+
+  if (availableWidth <= 0) {
+    return MIN_CANVAS_SCALE;
+  }
+
+  return clampCanvasScale(availableWidth / CANVAS_WIDTH);
 };
 
 const resetCanvasView = () => {
-  canvasScale = 4;
-  centerCanvasInWorkspace();
+  isCanvasAutoFit = true;
+  centerCanvasInWorkspace(getCanvasWidthFitScale());
 };
 
 const setCollapsed = (collapsed: boolean) => {
@@ -242,6 +257,7 @@ workspaceView.addEventListener("pointerdown", (event) => {
   const handlePointerMove = (moveEvent: PointerEvent) => {
     const deltaX = moveEvent.clientX - startX;
     const deltaY = moveEvent.clientY - startY;
+    isCanvasAutoFit = false;
     setCanvasTransform(startOffsetX + deltaX, startOffsetY + deltaY, canvasScale);
   };
 
@@ -271,6 +287,8 @@ workspaceView.addEventListener("wheel", (event) => {
     return;
   }
 
+  isCanvasAutoFit = false;
+
   const canvasX = (mouseX - canvasOffsetX) / canvasScale;
   const canvasY = (mouseY - canvasOffsetY) / canvasScale;
   const nextOffsetX = mouseX - canvasX * nextScale;
@@ -279,9 +297,13 @@ workspaceView.addEventListener("wheel", (event) => {
   setCanvasTransform(nextOffsetX, nextOffsetY, nextScale);
 });
 
-window.addEventListener("resize", () => {
-  centerCanvasInWorkspace();
+const resizeObserver = new ResizeObserver(() => {
+  if (isCanvasAutoFit) {
+    resetCanvasView();
+  }
 });
+
+resizeObserver.observe(workspaceView);
 
 setCollapsed(false);
 setInspectorHeight(COLLAPSED_INSPECTOR_HEIGHT);
