@@ -175,44 +175,6 @@ const renderChunkGrid = () => {
   context.restore();
 };
 
-const drawGravityArrow = () => {
-  if (gravityMagnitude <= 0) {
-    return;
-  }
-
-  const angleRadians = (rotationDegrees * Math.PI) / 180;
-  const directionX = Math.sin(angleRadians);
-  const directionY = Math.cos(angleRadians);
-  const centerX = 42;
-  const centerY = 42;
-  const shaftLength = 22;
-  const headLength = 8;
-  const tipX = centerX + directionX * shaftLength;
-  const tipY = centerY + directionY * shaftLength;
-  const baseX = centerX - directionX * 6;
-  const baseY = centerY - directionY * 6;
-  const leftHeadX = tipX - directionX * headLength - directionY * 4;
-  const leftHeadY = tipY - directionY * headLength + directionX * 4;
-  const rightHeadX = tipX - directionX * headLength + directionY * 4;
-  const rightHeadY = tipY - directionY * headLength - directionX * 4;
-
-  context.save();
-  context.strokeStyle = "rgba(255, 248, 220, 0.95)";
-  context.fillStyle = "rgba(255, 248, 220, 0.95)";
-  context.lineWidth = 2;
-  context.beginPath();
-  context.moveTo(baseX, baseY);
-  context.lineTo(tipX, tipY);
-  context.stroke();
-  context.beginPath();
-  context.moveTo(tipX, tipY);
-  context.lineTo(leftHeadX, leftHeadY);
-  context.lineTo(rightHeadX, rightHeadY);
-  context.closePath();
-  context.fill();
-  context.restore();
-};
-
 const renderCurrentFrame = (dt: number) => {
   animate(animationBuffer, dt, {
     gravityMagnitude,
@@ -225,8 +187,6 @@ const renderCurrentFrame = (dt: number) => {
   if (isChunkGridVisible) {
     renderChunkGrid();
   }
-
-  drawGravityArrow();
 };
 
 const applyPendingGridSize = () => {
@@ -260,8 +220,26 @@ let canvasOffsetY = 0;
 let canvasScale = 1;
 let isCanvasAutoFit = true;
 
+const getViewRotationRadians = () => {
+  return (rotationDegrees * Math.PI) / 180;
+};
+
+const getRotatedCanvasBounds = (scale: number) => {
+  const angle = getViewRotationRadians();
+  const absCos = Math.abs(Math.cos(angle));
+  const absSin = Math.abs(Math.sin(angle));
+  const scaledWidth = gridWidth * scale;
+  const scaledHeight = gridHeight * scale;
+
+  return {
+    height: scaledWidth * absSin + scaledHeight * absCos,
+    width: scaledWidth * absCos + scaledHeight * absSin,
+  };
+};
+
 const renderCanvasTransform = () => {
-  canvasStage.style.transform = `translate(${canvasOffsetX}px, ${canvasOffsetY}px) scale(${canvasScale})`;
+  canvasStage.style.transform =
+    `translate(${canvasOffsetX}px, ${canvasOffsetY}px) rotate(${rotationDegrees}deg) scale(${canvasScale})`;
 };
 
 const setCanvasTransform = (x: number, y: number, scale: number) => {
@@ -276,8 +254,11 @@ const clampCanvasScale = (scale: number) => {
 };
 
 const centerCanvasInWorkspace = (scale: number) => {
-  const x = (workspaceView.clientWidth - gridWidth * scale) * 0.5;
-  const y = (workspaceView.clientHeight - gridHeight * scale) * 0.5;
+  const rotatedBounds = getRotatedCanvasBounds(scale);
+  const x = (workspaceView.clientWidth - rotatedBounds.width) * 0.5 +
+    (rotatedBounds.width - gridWidth * scale) * 0.5;
+  const y = (workspaceView.clientHeight - rotatedBounds.height) * 0.5 +
+    (rotatedBounds.height - gridHeight * scale) * 0.5;
   setCanvasTransform(x, y, scale);
 };
 
@@ -389,6 +370,13 @@ rotationSlider.addEventListener("input", () => {
     Math.min(MAX_ROTATION_DEGREES, nextRotation),
   );
   rotationValue.textContent = formatRotation(rotationDegrees);
+
+  if (isCanvasAutoFit) {
+    resetCanvasView();
+  } else {
+    renderCanvasTransform();
+  }
+
   renderCurrentFrame(0);
 });
 
