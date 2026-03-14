@@ -185,7 +185,11 @@ const pushRecordedAction = (
 };
 
 const updateRecordingUi = () => {
-  recordingToggleButton.textContent = recorder.isRecording ? "Stop" : "Record";
+  const recordingLabel = recordingToggleButton.querySelector<HTMLElement>(".side-button-label");
+
+  if (recordingLabel) {
+    recordingLabel.textContent = recorder.isRecording ? "Stop" : "Record";
+  }
   recordingExportButton.disabled = recorder.isRecording || recorder.actions.length === 0;
   simulationResetButton.disabled = recorder.isRecording;
   gridWidthInput.disabled = recorder.isRecording;
@@ -210,6 +214,17 @@ const updateRecordingUi = () => {
     <div><span class="recording-status-label">Tick</span> ${currentRecordedTick ?? "n/a"}</div>
     <div><span class="recording-status-label">Hash</span> ${currentRecordedHash ?? "n/a"}</div>
   `;
+};
+
+const updateAnimationToggleUi = () => {
+  const animationLabel =
+    animationToggleButton.querySelector<HTMLElement>(".side-button-label");
+
+  animationToggleButton.dataset.state = isAnimationRunning ? "running" : "paused";
+
+  if (animationLabel) {
+    animationLabel.textContent = isAnimationRunning ? "Pause" : "Resume";
+  }
 };
 
 const setCanvasDimensions = (width: number, height: number) => {
@@ -608,7 +623,7 @@ panelToggle.addEventListener("click", () => {
 
 animationToggleButton.addEventListener("click", () => {
   isAnimationRunning = !isAnimationRunning;
-  animationToggleButton.textContent = isAnimationRunning ? "Pause" : "Resume";
+  updateAnimationToggleUi();
 });
 
 recordingToggleButton.addEventListener("click", () => {
@@ -655,7 +670,7 @@ recordingExportButton.addEventListener("click", () => {
 simulationStepButton.addEventListener("click", () => {
   if (isAnimationRunning) {
     isAnimationRunning = false;
-    animationToggleButton.textContent = "Resume";
+    updateAnimationToggleUi();
   }
 
   stepCurrentFrame();
@@ -963,5 +978,6 @@ setInspectorHeight(COLLAPSED_INSPECTOR_HEIGHT);
 resetCanvasView();
 updateInspector();
 updateRecordingUi();
+updateAnimationToggleUi();
 renderCurrentFrame(0);
 requestAnimationFrame(frame);

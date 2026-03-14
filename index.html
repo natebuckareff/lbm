@@ -25,12 +25,76 @@
           <div id="side-panel-body" class="side-panel-body">
             <p>This area is ready for navigation, controls, or status content.</p>
             <div class="control-group">
-              <button class="side-button animation-toggle" type="button">Pause</button>
-              <button class="side-button simulation-step" type="button">Step</button>
-              <button class="side-button recording-toggle" type="button">Record</button>
-              <button class="side-button recording-export" type="button" disabled>Export Recording</button>
-              <button class="side-button simulation-reset" type="button">Reset Simulation</button>
-              <button class="side-button view-reset" type="button">Reset View</button>
+              <button class="side-button animation-toggle" type="button" data-state="running">
+                <span class="side-button-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" focusable="false">
+                    <path
+                      class="icon-running"
+                      d="M5 3h2v10H5zM9 3h2v10H9z"
+                      fill="currentColor"
+                    ></path>
+                    <path
+                      class="icon-paused"
+                      d="M5 3v10l6-5-6-5z"
+                      fill="currentColor"
+                    ></path>
+                  </svg>
+                </span>
+                <span class="side-button-label">Pause</span>
+              </button>
+              <button class="side-button simulation-step" type="button">
+                <span class="side-button-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" focusable="false">
+                    <path d="M4 3v10l6-5-6-5zM11 3h1v10h-1z" fill="currentColor"></path>
+                  </svg>
+                </span>
+                <span class="side-button-label">Step</span>
+              </button>
+              <button class="side-button recording-toggle" type="button">
+                <span class="side-button-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" focusable="false">
+                    <circle cx="8" cy="8" r="3.25" fill="currentColor"></circle>
+                  </svg>
+                </span>
+                <span class="side-button-label">Record</span>
+              </button>
+              <button class="side-button recording-export" type="button" disabled>
+                <span class="side-button-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" focusable="false">
+                    <path
+                      d="M8 2v6.2l2.2-2.2.8.8L8 10 5 6.8l.8-.8L8 8.2V2h1zM3 11h10v2H3z"
+                      fill="currentColor"
+                    ></path>
+                  </svg>
+                </span>
+                <span class="side-button-label">Export Recording</span>
+              </button>
+              <button class="side-button simulation-reset" type="button">
+                <span class="side-button-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" focusable="false">
+                    <path
+                      d="M8 3a5 5 0 1 1-4.5 2.8l1 .5A3.9 3.9 0 1 0 8 4.1H5.8L7.9 6 7 6.8 3.3 4 7 .2l.9.8L5.8 3H8z"
+                      fill="currentColor"
+                    ></path>
+                  </svg>
+                </span>
+                <span class="side-button-label">Reset Simulation</span>
+              </button>
+              <button class="side-button view-reset" type="button">
+                <span class="side-button-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" focusable="false">
+                    <path
+                      d="M7.5 1h1v3.5H12v1H8.5V9h-1V5.5H4v-1h3.5zM3 11.5h2v1H3v-1zm8 0h2v1h-2v-1zM7.5 11.5h1v1h-1v-1z"
+                      fill="currentColor"
+                    ></path>
+                    <path
+                      d="M8 14a6 6 0 1 1 0-12 6 6 0 0 1 0 12zm0-1A5 5 0 1 0 8 3a5 5 0 0 0 0 10z"
+                      fill="currentColor"
+                    ></path>
+                  </svg>
+                </span>
+                <span class="side-button-label">Reset View</span>
+              </button>
               <label class="side-field">
                 <span class="side-field-label">Recording Name</span>
                 <input

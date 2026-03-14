@@ -95,6 +95,9 @@ body {
 }
 
 .side-button {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   width: 100%;
   min-height: 24px;
   border: 1px solid #304255;
@@ -107,8 +110,50 @@ body {
   cursor: pointer;
 }
 
+.side-button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: 0 0 0.9rem;
+  color: #9fb5c8;
+}
+
+.side-button-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.animation-toggle .icon-paused {
+  display: none;
+}
+
+.animation-toggle[data-state="paused"] .icon-running {
+  display: none;
+}
+
+.animation-toggle[data-state="paused"] .icon-paused {
+  display: block;
+}
+
+.side-button-label {
+  min-width: 0;
+}
+
 .side-button:hover {
   background: #1a2a3d;
+}
+
+.side-button:hover .side-button-icon,
+.side-button:focus-visible .side-button-icon {
+  color: #d9e2ec;
+}
+
+.side-button:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .side-button:focus-visible {
