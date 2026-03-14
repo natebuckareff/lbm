@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "endHash": "9dea741b3c9b5b3e",
+  "name": null,
+  "endTick": 2046,
+  "startTick": 0,
+  "actions": [
+    {
+      "tick": 0,
+      "seq": 0,
+      "hash": null,
+      "type": "start_sim",
+      "name": null,
+      "width": 128,
+      "height": 128,
+      "tau": 0.6,
+      "gravityMagnitude": 0.0017,
+      "rotationDegrees": 0,
+      "hashingEnabled": true
+    },
+    {
+      "tick": 254,
+      "seq": 0,
+      "hash": "99ec31bcfa9c2fc5",
+      "type": "set_rotation_degrees",
+      "value": -24
+    },
+    {
+      "tick": 270,
+      "seq": 0,
+      "hash": "cf56d4113f563ffa",
+      "type": "set_rotation_degrees",
+      "value": -134
+    },
+    {
+      "tick": 286,
+      "seq": 0,
+      "hash": "41445943543d6f0e",
+      "type": "set_rotation_degrees",
+      "value": -180
+    }
+  ]
+}
