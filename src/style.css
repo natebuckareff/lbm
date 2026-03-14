@@ -146,6 +146,21 @@ body {
   background: #1a2a3d;
 }
 
+.side-button.is-active {
+  border-color: #2d8251;
+  background: #163424;
+}
+
+.side-button.is-active:hover {
+  background: #1b412b;
+}
+
+.side-button.is-active .side-button-icon,
+.side-button.is-active:hover .side-button-icon,
+.side-button.is-active:focus-visible .side-button-icon {
+  color: #8ff0b4;
+}
+
 .side-button:hover .side-button-icon,
 .side-button:focus-visible .side-button-icon {
   color: #d9e2ec;
@@ -358,6 +373,7 @@ body {
   position: absolute;
   top: 0;
   left: 0;
+  z-index: 0;
   transform-origin: top left;
   will-change: transform;
 }
@@ -369,6 +385,23 @@ body {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   background: #1d4ed8;
+}
+
+.cell-highlight-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.cell-highlight-polygon {
+  fill: none;
+  stroke: #000;
+  stroke-width: 2px;
+  shape-rendering: geometricPrecision;
+  display: none;
 }
 
 .inspector-panel {

@@ -41,6 +41,10 @@ const inspectorBody = document.querySelector<HTMLElement>(".inspector-body");
 const workspaceView = document.querySelector<HTMLElement>(".workspace-view");
 const canvasStage = document.querySelector<HTMLElement>(".canvas-stage");
 const mainCanvas = document.querySelector<HTMLCanvasElement>(".main-canvas");
+const cellHighlightOverlay =
+  document.querySelector<SVGSVGElement>(".cell-highlight-overlay");
+const cellHighlightPolygon =
+  document.querySelector<SVGPolygonElement>(".cell-highlight-polygon");
 const animationToggleButton =
   document.querySelector<HTMLButtonElement>(".animation-toggle");
 const simulationStepButton =
@@ -57,6 +61,8 @@ const simulationResetButton =
   document.querySelector<HTMLButtonElement>(".simulation-reset");
 const viewResetButton =
   document.querySelector<HTMLButtonElement>(".view-reset");
+const unpinCellButton =
+  document.querySelector<HTMLButtonElement>(".unpin-cell");
 const gridWidthInput =
   document.querySelector<HTMLInputElement>(".grid-width-input");
 const gridHeightInput =
@@ -119,6 +125,8 @@ if (
   !workspaceView ||
   !canvasStage ||
   !mainCanvas ||
+  !cellHighlightOverlay ||
+  !cellHighlightPolygon ||
   !animationToggleButton ||
   !simulationStepButton ||
   !recordingToggleButton ||
@@ -127,6 +135,7 @@ if (
   !replayStopButton ||
   !simulationResetButton ||
   !viewResetButton ||
+  !unpinCellButton ||
   !gridWidthInput ||
   !gridHeightInput ||
   !visualizationModeSelect ||
@@ -166,6 +175,7 @@ const MAX_CANVAS_SCALE = 32;
 const ZOOM_STEP = 0.0015;
 const CANVAS_FIT_PADDING_X = 32;
 const CANVAS_FIT_PADDING_Y = 32;
+const POINTER_DRAG_THRESHOLD = 3;
 
 const context = mainCanvas.getContext("2d");
 
@@ -198,8 +208,10 @@ let isChunkGridVisible = false;
 let isInterpolationEnabled = false;
 let isHashingEnabled = false;
 let isDiagnosticsEnabled = false;
-let inspectedCellX = -1;
-let inspectedCellY = -1;
+let hoveredCellX = -1;
+let hoveredCellY = -1;
+let pinnedCellX = -1;
+let pinnedCellY = -1;
 const recorder = createRecorderState();
 type ControlChangeSource = "user" | "replay" | "load";
 type ReplayMismatch = {
@@ -245,6 +257,77 @@ const getCurrentStepInputs = () => ({
 const getLastRecordedAction = () => recorder.actions.at(-1) ?? null;
 const getIsReplayLoaded = () => replay.recording !== null;
 const getNextReplayAction = () => replay.recording?.actions[replay.nextActionIndex] ?? null;
+const hasPinnedCell = () => pinnedCellX >= 0 && pinnedCellY >= 0;
+
+const clearHoveredCell = () => {
+  hoveredCellX = -1;
+  hoveredCellY = -1;
+};
+
+const clearPinnedCell = () => {
+  pinnedCellX = -1;
+  pinnedCellY = -1;
+};
+
+const updateHighlightOverlaySize = () => {
+  cellHighlightOverlay.setAttribute("viewBox", `0 0 ${workspaceView.clientWidth} ${workspaceView.clientHeight}`);
+};
+
+const getWorkspacePointFromGridPoint = (gridX: number, gridY: number) => {
+  const centerX = gridWidth * 0.5;
+  const centerY = gridHeight * 0.5;
+  const angle = getViewRotationRadians();
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const localX = (gridX - centerX) * canvasScale;
+  const localY = (gridY - centerY) * canvasScale;
+
+  return {
+    x: canvasOffsetX + centerX + (localX * cos - localY * sin),
+    y: canvasOffsetY + centerY + (localX * sin + localY * cos),
+  };
+};
+
+const updatePinnedCellHighlight = () => {
+  if (!hasPinnedCell()) {
+    cellHighlightPolygon.style.display = "none";
+    return;
+  }
+
+  updateHighlightOverlaySize();
+  const points = [
+    getWorkspacePointFromGridPoint(pinnedCellX, pinnedCellY),
+    getWorkspacePointFromGridPoint(pinnedCellX + 1, pinnedCellY),
+    getWorkspacePointFromGridPoint(pinnedCellX + 1, pinnedCellY + 1),
+    getWorkspacePointFromGridPoint(pinnedCellX, pinnedCellY + 1),
+  ];
+
+  cellHighlightPolygon.style.display = "block";
+  cellHighlightPolygon.setAttribute(
+    "points",
+    points.map((point) => `${point.x},${point.y}`).join(" "),
+  );
+};
+
+const updatePinnedCellUi = () => {
+  const pinned = hasPinnedCell();
+  unpinCellButton.disabled = !pinned;
+  unpinCellButton.classList.toggle("is-active", pinned);
+};
+
+const pinCell = (x: number, y: number) => {
+  pinnedCellX = x;
+  pinnedCellY = y;
+  clearHoveredCell();
+  updatePinnedCellHighlight();
+  updatePinnedCellUi();
+};
+
+const unpinCell = () => {
+  clearPinnedCell();
+  updatePinnedCellHighlight();
+  updatePinnedCellUi();
+};
 
 const updateControlLocks = () => {
   const replayLoaded = getIsReplayLoaded();
@@ -451,6 +534,7 @@ const applyRotationDegrees = (
     resetCanvasView();
   } else {
     renderCanvasTransform();
+    updatePinnedCellHighlight();
   }
 
   if (source === "user") {
@@ -589,6 +673,7 @@ const setCanvasDimensions = (width: number, height: number) => {
   mainCanvas.height = height;
   mainCanvas.style.width = `${width}px`;
   mainCanvas.style.height = `${height}px`;
+  updateHighlightOverlaySize();
 };
 
 const recreateFrameBuffer = (width: number, height: number) => {
@@ -697,24 +782,30 @@ const renderDiagnosticsSummary = (info: CellDebugInfo | null) => {
 };
 
 const updateInspector = () => {
-  if (inspectedCellX < 0 || inspectedCellY < 0) {
+  const activeCellX = hasPinnedCell() ? pinnedCellX : hoveredCellX;
+  const activeCellY = hasPinnedCell() ? pinnedCellY : hoveredCellY;
+
+  if (activeCellX < 0 || activeCellY < 0) {
     const info = inspectSimulationCell(animationBuffer, 0, 0);
     inspectorBody.innerHTML = `
       ${renderDiagnosticsSummary(info)}
-      <div class="inspector-empty">Hover the simulation to inspect a cell.</div>
+      <div class="inspector-empty">Hover the simulation to inspect a cell, or click to pin one.</div>
     `;
     return;
   }
 
-  const info = inspectSimulationCell(animationBuffer, inspectedCellX, inspectedCellY);
+  const info = inspectSimulationCell(animationBuffer, activeCellX, activeCellY);
 
   if (info === null) {
     const fallbackInfo = inspectSimulationCell(animationBuffer, 0, 0);
-    inspectedCellX = -1;
-    inspectedCellY = -1;
+    if (hasPinnedCell()) {
+      unpinCell();
+    } else {
+      clearHoveredCell();
+    }
     inspectorBody.innerHTML = `
       ${renderDiagnosticsSummary(fallbackInfo)}
-      <div class="inspector-empty">Hover the simulation to inspect a cell.</div>
+      <div class="inspector-empty">Hover the simulation to inspect a cell, or click to pin one.</div>
     `;
     return;
   }
@@ -773,6 +864,14 @@ const renderChunkGrid = () => {
   context.restore();
 };
 
+const presentCurrentCanvas = () => {
+  presentPixels();
+
+  if (isChunkGridVisible) {
+    renderChunkGrid();
+  }
+};
+
 const renderCurrentFrame = (dt: number) => {
   animate(animationBuffer, dt, {
     afterFixedStep: () => {
@@ -793,11 +892,7 @@ const renderCurrentFrame = (dt: number) => {
     tau,
     visualizationMode,
   });
-  presentPixels();
-
-  if (isChunkGridVisible) {
-    renderChunkGrid();
-  }
+  presentCurrentCanvas();
 
   updateInspector();
   updateRecordingUi();
@@ -836,11 +931,7 @@ const stepCurrentFrame = () => {
     tau,
     visualizationMode,
   });
-  presentPixels();
-
-  if (isChunkGridVisible) {
-    renderChunkGrid();
-  }
+  presentCurrentCanvas();
 
   updateInspector();
   updateRecordingUi();
@@ -955,6 +1046,7 @@ const setCanvasTransform = (x: number, y: number, scale: number) => {
   canvasOffsetY = y;
   canvasScale = scale;
   renderCanvasTransform();
+  updatePinnedCellHighlight();
 };
 
 const clampCanvasScale = (scale: number) => {
@@ -1111,6 +1203,16 @@ viewResetButton.addEventListener("click", () => {
   applyRotationDegrees(DEFAULT_ROTATION_DEGREES, "user", false);
   resetCanvasView();
   renderCurrentFrame(0);
+});
+
+unpinCellButton.addEventListener("click", () => {
+  if (!hasPinnedCell()) {
+    return;
+  }
+
+  unpinCell();
+  presentCurrentCanvas();
+  updateInspector();
 });
 
 visualizationModeSelect.addEventListener("change", () => {
@@ -1298,23 +1400,59 @@ workspaceView.addEventListener("pointerdown", (event) => {
   const startY = event.clientY;
   const startOffsetX = canvasOffsetX;
   const startOffsetY = canvasOffsetY;
+  let hasDragged = false;
 
-  workspaceView.classList.add("is-panning");
   workspaceView.setPointerCapture(pointerId);
 
   const handlePointerMove = (moveEvent: PointerEvent) => {
     const deltaX = moveEvent.clientX - startX;
     const deltaY = moveEvent.clientY - startY;
+    if (
+      !hasDragged &&
+      (Math.abs(deltaX) >= POINTER_DRAG_THRESHOLD ||
+        Math.abs(deltaY) >= POINTER_DRAG_THRESHOLD)
+    ) {
+      hasDragged = true;
+      workspaceView.classList.add("is-panning");
+    }
+
+    if (!hasDragged) {
+      return;
+    }
+
     isCanvasAutoFit = false;
     setCanvasTransform(startOffsetX + deltaX, startOffsetY + deltaY, canvasScale);
   };
 
-  const handlePointerEnd = () => {
+  const handlePointerEnd = (endEvent: PointerEvent) => {
     workspaceView.classList.remove("is-panning");
     workspaceView.releasePointerCapture(pointerId);
     workspaceView.removeEventListener("pointermove", handlePointerMove);
     workspaceView.removeEventListener("pointerup", handlePointerEnd);
     workspaceView.removeEventListener("pointercancel", handlePointerEnd);
+
+    if (endEvent.type !== "pointerup" || hasDragged) {
+      return;
+    }
+
+    const rect = workspaceView.getBoundingClientRect();
+    const localX = endEvent.clientX - rect.left;
+    const localY = endEvent.clientY - rect.top;
+    const gridCoordinates = getGridCoordinatesFromWorkspacePoint(localX, localY);
+    const info = inspectSimulationCell(animationBuffer, gridCoordinates.x, gridCoordinates.y);
+
+    if (info === null) {
+      return;
+    }
+
+    if (hasPinnedCell() && pinnedCellX === info.x && pinnedCellY === info.y) {
+      unpinCell();
+    } else {
+      pinCell(info.x, info.y);
+    }
+
+    presentCurrentCanvas();
+    updateInspector();
   };
 
   workspaceView.addEventListener("pointermove", handlePointerMove);
@@ -1323,6 +1461,11 @@ workspaceView.addEventListener("pointerdown", (event) => {
 });
 
 workspaceView.addEventListener("pointermove", (event) => {
+  if (hasPinnedCell()) {
+    updateInspector();
+    return;
+  }
+
   const rect = workspaceView.getBoundingClientRect();
   const localX = event.clientX - rect.left;
   const localY = event.clientY - rect.top;
@@ -1330,14 +1473,20 @@ workspaceView.addEventListener("pointermove", (event) => {
   const info = inspectSimulationCell(animationBuffer, gridCoordinates.x, gridCoordinates.y);
 
   if (info !== null) {
-    inspectedCellX = info.x;
-    inspectedCellY = info.y;
+    hoveredCellX = info.x;
+    hoveredCellY = info.y;
+  } else {
+    clearHoveredCell();
   }
 
   updateInspector();
 });
 
 workspaceView.addEventListener("pointerleave", () => {
+  if (!hasPinnedCell()) {
+    clearHoveredCell();
+  }
+
   updateInspector();
 });
 
@@ -1365,6 +1514,8 @@ workspaceView.addEventListener("wheel", (event) => {
 });
 
 const resizeObserver = new ResizeObserver(() => {
+  updateHighlightOverlaySize();
+  updatePinnedCellHighlight();
   if (isCanvasAutoFit) {
     resetCanvasView();
   }
@@ -1375,6 +1526,8 @@ resizeObserver.observe(workspaceView);
 setCollapsed(false);
 setInspectorHeight(COLLAPSED_INSPECTOR_HEIGHT);
 resetCanvasView();
+updatePinnedCellHighlight();
+updatePinnedCellUi();
 updateInspector();
 updateRecordingUi();
 updateReplayUi();
