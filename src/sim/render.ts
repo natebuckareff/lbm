@@ -73,22 +73,29 @@ const DEBUG_INTERFACE_HIGH = {
 
 const sampleSpeedPalette = (normalizedSpeed: number) => {
   const t = Math.max(0, Math.min(1, normalizedSpeed));
+  const stops = [
+    { at: 0, color: { red: 34, green: 58, blue: 112 } },
+    { at: 0.18, color: { red: 52, green: 156, blue: 196 } },
+    { at: 0.4, color: { red: 244, green: 211, blue: 94 } },
+    { at: 0.7, color: { red: 231, green: 108, blue: 49 } },
+    { at: 1, color: { red: 160, green: 36, blue: 36 } },
+  ];
 
-  if (t < 0.4) {
-    const localT = t / 0.4;
-    return {
-      blue: lerp(178, 132, localT),
-      green: lerp(124, 184, localT),
-      red: lerp(38, 68, localT),
-    };
+  for (let index = 1; index < stops.length; index += 1) {
+    const left = stops[index - 1];
+    const right = stops[index];
+
+    if (t <= right.at) {
+      const localT = (t - left.at) / Math.max(right.at - left.at, 1e-6);
+      return {
+        blue: lerp(left.color.blue, right.color.blue, localT),
+        green: lerp(left.color.green, right.color.green, localT),
+        red: lerp(left.color.red, right.color.red, localT),
+      };
+    }
   }
 
-  const localT = (t - 0.4) / 0.6;
-  return {
-    blue: lerp(132, 52, localT),
-    green: lerp(184, 214, localT),
-    red: lerp(68, 245, localT),
-  };
+  return stops[stops.length - 1].color;
 };
 
 export const renderState = (
