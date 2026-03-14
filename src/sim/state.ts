@@ -65,6 +65,7 @@ export const createSimulationState = (
   const mass = new Float32Array(cellCount);
   const nextMass = new Float32Array(cellCount);
   const provisionalFlags = new Uint8Array(cellCount);
+  const seedMassIncoming = new Float32Array(cellCount);
   const normalX = new Float32Array(cellCount);
   const normalY = new Float32Array(cellCount);
   const previousFill = new Float32Array(cellCount);
@@ -168,6 +169,7 @@ export const createSimulationState = (
         previousFill,
         previousRho,
         provisionalFlags,
+        seedMassIncoming,
         previousUx,
         previousUy,
         rho,

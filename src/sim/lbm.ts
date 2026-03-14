@@ -29,7 +29,7 @@ const MIN_FILL = 0.05;
 const FILL_OFFSET = 1e-3;
 const MAX_SPEED = 0.25;
 const PROVISIONAL_FILL_EPSILON = 0.05;
-const EMPTY_MASS_THRESHOLD = MIN_FILL;
+const EMPTY_FILL_THRESHOLD = MIN_FILL;
 const PROVISIONAL_SOLID = 0;
 const PROVISIONAL_LIQUID = 1;
 const PROVISIONAL_EMPTY = 2;
@@ -63,8 +63,9 @@ const hasNeighborType = (
   x: number,
   y: number,
   wanted: number,
+  directions: readonly number[] = DIRECTIONS_X.map((_, index) => index).slice(1),
 ) => {
-  for (let direction = 1; direction < DIRECTION_COUNT; direction += 1) {
+  for (const direction of directions) {
     const neighborX = x + DIRECTIONS_X[direction];
     const neighborY = y + DIRECTIONS_Y[direction];
 
@@ -283,6 +284,41 @@ const collectProvisionalNeighborStats = (
     touchesEmpty,
     touchesLiquid,
   };
+};
+
+const cardinalEmptyAdvanceTargets = (
+  state: SimulationState,
+  x: number,
+  y: number,
+) => {
+  const { fields, width, height } = state.domain;
+  const preferredTargets: number[] = [];
+  const fallbackTargets: number[] = [];
+  const normalX = fields.normalX[y * width + x];
+  const normalY = fields.normalY[y * width + x];
+
+  for (const direction of CARDINAL_DIRECTIONS) {
+    const neighborX = x + DIRECTIONS_X[direction];
+    const neighborY = y + DIRECTIONS_Y[direction];
+
+    if (neighborX < 0 || neighborX >= width || neighborY < 0 || neighborY >= height) {
+      continue;
+    }
+
+    const neighborIndex = neighborY * width + neighborX;
+    if (fields.flags[neighborIndex] !== CELL_EMPTY) {
+      continue;
+    }
+
+    fallbackTargets.push(neighborIndex);
+
+    const alignment = normalX * DIRECTIONS_X[direction] + normalY * DIRECTIONS_Y[direction];
+    if (alignment > 0) {
+      preferredTargets.push(neighborIndex);
+    }
+  }
+
+  return preferredTargets.length > 0 ? preferredTargets : fallbackTargets;
 };
 
 const averageLiquidNeighborhood = (
@@ -594,7 +630,7 @@ const updateInterfaceMass = (state: SimulationState) => {
 
 const postProcessInterface = (state: SimulationState) => {
   const { fields, width, height } = state.domain;
-  const { provisionalFlags } = fields;
+  const { provisionalFlags, seedMassIncoming } = fields;
 
   for (let cellIndex = 0; cellIndex < fields.flags.length; cellIndex += 1) {
     const flag = fields.flags[cellIndex];
@@ -642,9 +678,10 @@ const postProcessInterface = (state: SimulationState) => {
     } else if (fill <= 0.5 - PROVISIONAL_FILL_EPSILON) {
       provisionalFlags[cellIndex] = PROVISIONAL_EMPTY;
     } else {
-      provisionalFlags[cellIndex] = neighborStats.touchesFluid
-        ? PROVISIONAL_LIQUID
-        : PROVISIONAL_EMPTY;
+      provisionalFlags[cellIndex] =
+        !neighborStats.touchesEmpty && neighborStats.touchesFluid
+          ? PROVISIONAL_LIQUID
+          : PROVISIONAL_EMPTY;
     }
   }
 
@@ -675,19 +712,35 @@ const postProcessInterface = (state: SimulationState) => {
   }
 
   fields.nextMass.set(fields.mass);
+  seedMassIncoming.fill(0);
   fields.nextFill.fill(0);
 
-  for (let cellIndex = 0; cellIndex < provisionalFlags.length; cellIndex += 1) {
-    if (provisionalFlags[cellIndex] !== PROVISIONAL_EMPTY) {
+  for (let cellIndex = 0; cellIndex < fields.flags.length; cellIndex += 1) {
+    if (fields.flags[cellIndex] !== CELL_INTERFACE) {
       continue;
     }
 
     const x = cellIndex % width;
     const y = Math.floor(cellIndex / width);
+    const density = Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY);
+    const excessMass = Math.max(fields.mass[cellIndex] - density, 0);
 
-    if (hasNeighborType(fields.nextFlags, width, height, x, y, CELL_FLUID)) {
-      fields.nextFlags[cellIndex] = CELL_INTERFACE;
+    if (excessMass <= FILL_OFFSET * density) {
+      continue;
     }
+
+    const candidateTargets = cardinalEmptyAdvanceTargets(state, x, y);
+    if (candidateTargets.length === 0) {
+      continue;
+    }
+
+    const share = excessMass / candidateTargets.length;
+    for (const neighborIndex of candidateTargets) {
+      fields.nextFlags[neighborIndex] = CELL_INTERFACE;
+      seedMassIncoming[neighborIndex] += share;
+    }
+
+    fields.nextMass[cellIndex] = Math.max(fields.nextMass[cellIndex] - excessMass, 0);
   }
 
   for (let cellIndex = 0; cellIndex < fields.flags.length; cellIndex += 1) {
@@ -715,10 +768,17 @@ const postProcessInterface = (state: SimulationState) => {
     if (oldFlag === CELL_EMPTY && newFlag === CELL_INTERFACE) {
       const x = cellIndex % width;
       const y = Math.floor(cellIndex / width);
-      const average = averageLiquidNeighborhood(state, x, y, fields.nextFlags);
+      const average = averageLiquidNeighborhood(state, x, y, fields.flags);
       const seededDensity = Math.max(average.density, ATMOSPHERIC_DENSITY);
-      const seededMass = INTERFACE_FILL_FRACTION * seededDensity;
-      fields.nextMass[cellIndex] = seededMass;
+      const seededMass = seedMassIncoming[cellIndex];
+
+      if (seededMass <= FILL_OFFSET * seededDensity) {
+        fields.nextFlags[cellIndex] = CELL_EMPTY;
+        fields.nextMass[cellIndex] = 0;
+        continue;
+      }
+
+      fields.nextMass[cellIndex] = clamp(seededMass, 0, seededDensity);
       fields.rho[cellIndex] = seededDensity;
       fields.ux[cellIndex] = average.velocityX;
       fields.uy[cellIndex] = average.velocityY;
@@ -735,17 +795,18 @@ const postProcessInterface = (state: SimulationState) => {
     }
 
     if (oldFlag === CELL_INTERFACE && newFlag === CELL_FLUID) {
-      if (currentMass >= density - FILL_OFFSET) {
+      const stagedMass = clamp(fields.nextMass[cellIndex], 0, stagedDensity);
+      if (stagedMass >= density - FILL_OFFSET * density) {
         fields.nextMass[cellIndex] = density;
       } else {
         fields.nextFlags[cellIndex] = CELL_INTERFACE;
-        fields.nextMass[cellIndex] = currentMass;
+        fields.nextMass[cellIndex] = stagedMass;
       }
       continue;
     }
 
     if (oldFlag === CELL_INTERFACE && newFlag === CELL_EMPTY) {
-      if (currentMass > EMPTY_MASS_THRESHOLD * stagedDensity) {
+      if (currentMass > EMPTY_FILL_THRESHOLD * stagedDensity) {
         fields.nextFlags[cellIndex] = CELL_INTERFACE;
         fields.nextMass[cellIndex] = currentMass;
       } else {
@@ -756,18 +817,7 @@ const postProcessInterface = (state: SimulationState) => {
     }
 
     if (oldFlag === CELL_INTERFACE && newFlag === CELL_INTERFACE) {
-      fields.nextMass[cellIndex] = currentMass;
-    }
-  }
-
-  for (let cellIndex = 0; cellIndex < fields.flags.length; cellIndex += 1) {
-    if (fields.nextFlags[cellIndex] !== CELL_INTERFACE || fields.flags[cellIndex] !== CELL_EMPTY) {
-      continue;
-    }
-
-    if (fields.nextMass[cellIndex] <= FILL_OFFSET) {
-      fields.nextFlags[cellIndex] = CELL_EMPTY;
-      fields.nextMass[cellIndex] = 0;
+      fields.nextMass[cellIndex] = clamp(fields.nextMass[cellIndex], 0, stagedDensity);
     }
   }
 
@@ -778,7 +828,7 @@ const postProcessInterface = (state: SimulationState) => {
 
     const x = cellIndex % width;
     const y = Math.floor(cellIndex / width);
-    if (hasNeighborType(fields.nextFlags, width, height, x, y, CELL_EMPTY)) {
+    if (hasNeighborType(fields.nextFlags, width, height, x, y, CELL_EMPTY, CARDINAL_DIRECTIONS)) {
       fields.nextFlags[cellIndex] = CELL_INTERFACE;
       fields.nextMass[cellIndex] = Math.max(fields.rho[cellIndex], MIN_DENSITY);
     }

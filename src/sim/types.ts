@@ -37,6 +37,7 @@ export type LatticeFields = {
   previousFill: Float32Array;
   previousRho: Float32Array;
   provisionalFlags: Uint8Array;
+  seedMassIncoming: Float32Array;
   previousUx: Float32Array;
   previousUy: Float32Array;
   rho: Float32Array;
