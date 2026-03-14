@@ -488,6 +488,8 @@ const setReplayMismatch = (
     expectedHash,
     tick,
   };
+  isAnimationRunning = false;
+  updateAnimationToggleUi();
 };
 
 const verifyReplayHash = (
@@ -506,7 +508,7 @@ const verifyReplayHash = (
 };
 
 const applyReplayActionsForCurrentTick = () => {
-  if (!replay.recording || replay.isCompleted) {
+  if (!replay.recording || replay.isCompleted || replay.isDiverged) {
     return;
   }
 
@@ -518,6 +520,9 @@ const applyReplayActionsForCurrentTick = () => {
     }
 
     verifyReplayHash(action.hash, currentTick, action.type);
+    if (replay.isDiverged) {
+      break;
+    }
 
     if (action.type === "set_tau") {
       applyTau(action.value, "replay", false);
@@ -532,7 +537,7 @@ const applyReplayActionsForCurrentTick = () => {
 };
 
 const completeReplayIfNeeded = () => {
-  if (!replay.recording || replay.isCompleted) {
+  if (!replay.recording || replay.isCompleted || replay.isDiverged) {
     return;
   }
 
@@ -763,11 +768,11 @@ const renderCurrentFrame = (dt: number) => {
       completeReplayIfNeeded();
     },
     beforeFixedStep: () => {
-      if (replay.isCompleted) {
+      if (replay.isCompleted || replay.isDiverged) {
         return false;
       }
       applyReplayActionsForCurrentTick();
-      return replay.isCompleted ? false : getCurrentStepInputs();
+      return replay.isCompleted || replay.isDiverged ? false : getCurrentStepInputs();
     },
     gravityMagnitude,
     hashingEnabled: isHashingEnabled,
@@ -802,7 +807,7 @@ const applyPendingGridSize = () => {
 
 const stepCurrentFrame = () => {
   applyReplayActionsForCurrentTick();
-  if (replay.isCompleted) {
+  if (replay.isCompleted || replay.isDiverged) {
     renderCurrentFrame(0);
     return;
   }
@@ -810,7 +815,8 @@ const stepCurrentFrame = () => {
     afterFixedStep: () => {
       completeReplayIfNeeded();
     },
-    beforeFixedStep: () => (replay.isCompleted ? false : getCurrentStepInputs()),
+    beforeFixedStep: () =>
+      replay.isCompleted || replay.isDiverged ? false : getCurrentStepInputs(),
     gravityMagnitude,
     hashingEnabled: isHashingEnabled,
     interpolationEnabled: isInterpolationEnabled,
