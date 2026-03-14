@@ -126,7 +126,7 @@ let animationBuffer: MutableAnimationBuffer = {
   pixels: pixelBytes,
   width: gridWidth,
 };
-let visualizationMode: VisualizationMode = "surface";
+let visualizationMode: VisualizationMode = "speed";
 let tau = DEFAULT_TAU;
 let gravityMagnitude = DEFAULT_GRAVITY;
 let rotationDegrees = DEFAULT_ROTATION_DEGREES;
@@ -553,7 +553,7 @@ viewResetButton.addEventListener("click", () => {
 visualizationModeSelect.addEventListener("change", () => {
   const nextMode = visualizationModeSelect.value;
 
-  if (nextMode === "surface" || nextMode === "speed" || nextMode === "debug") {
+  if (nextMode === "speed" || nextMode === "density" || nextMode === "debug") {
     visualizationMode = nextMode;
     renderCurrentFrame(0);
   }

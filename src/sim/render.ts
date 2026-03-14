@@ -6,7 +6,7 @@ import {
   type SimulationState,
 } from "./types";
 
-export type VisualizationMode = "debug" | "speed" | "surface";
+export type VisualizationMode = "debug" | "density" | "speed";
 
 export type RenderOptions = {
   interpolationAlpha: number;
@@ -98,6 +98,32 @@ const sampleSpeedPalette = (normalizedSpeed: number) => {
   return stops[stops.length - 1].color;
 };
 
+const sampleDensityPalette = (normalizedDensity: number) => {
+  const t = Math.max(0, Math.min(1, normalizedDensity));
+  const stops = [
+    { at: 0, color: { red: 94, green: 54, blue: 24 } },
+    { at: 0.4, color: { red: 168, green: 102, blue: 37 } },
+    { at: 0.7, color: { red: 222, green: 160, blue: 58 } },
+    { at: 1, color: { red: 252, green: 228, blue: 142 } },
+  ];
+
+  for (let index = 1; index < stops.length; index += 1) {
+    const left = stops[index - 1];
+    const right = stops[index];
+
+    if (t <= right.at) {
+      const localT = (t - left.at) / Math.max(right.at - left.at, 1e-6);
+      return {
+        blue: lerp(left.color.blue, right.color.blue, localT),
+        green: lerp(left.color.green, right.color.green, localT),
+        red: lerp(left.color.red, right.color.red, localT),
+      };
+    }
+  }
+
+  return stops[stops.length - 1].color;
+};
+
 export const renderState = (
   state: SimulationState,
   pixels: Uint8ClampedArray,
@@ -160,17 +186,6 @@ export const renderState = (
       continue;
     }
 
-    if (mode === "surface") {
-      const color = blendColor(AIR_COLOR, LIQUID_COLOR, interpolatedFill);
-      const foam = flag === CELL_INTERFACE ? (1 - interpolatedFill) * 42 : 0;
-
-      pixels[pixelBase] = clampChannel(color.red + foam);
-      pixels[pixelBase + 1] = clampChannel(color.green + foam);
-      pixels[pixelBase + 2] = clampChannel(color.blue + foam * 0.7);
-      pixels[pixelBase + 3] = 255;
-      continue;
-    }
-
     const velocityX = options.interpolationEnabled
       ? lerp(previousUx[cellIndex], ux[cellIndex], alpha)
       : ux[cellIndex];
@@ -186,8 +201,9 @@ export const renderState = (
       continue;
     }
 
-    const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
-    const color = sampleSpeedPalette(Math.min(speed * 34, 1));
+    const color = mode === "density"
+      ? sampleDensityPalette(Math.max(0, Math.min(1, (state.domain.fields.rho[cellIndex] - 0.94) / 0.12)))
+      : sampleSpeedPalette(Math.min(Math.sqrt(velocityX * velocityX + velocityY * velocityY) * 34, 1));
     const mixed = blendColor(AIR_COLOR, color, interpolatedFill);
 
     pixels[pixelBase] = clampChannel(mixed.red);
