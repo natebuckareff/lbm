@@ -64,6 +64,7 @@ export const createSimulationState = (
   const nextFill = new Float32Array(cellCount);
   const mass = new Float32Array(cellCount);
   const nextMass = new Float32Array(cellCount);
+  const provisionalFlags = new Uint8Array(cellCount);
   const normalX = new Float32Array(cellCount);
   const normalY = new Float32Array(cellCount);
   const previousFill = new Float32Array(cellCount);
@@ -166,6 +167,7 @@ export const createSimulationState = (
         postDistributions,
         previousFill,
         previousRho,
+        provisionalFlags,
         previousUx,
         previousUy,
         rho,
@@ -191,7 +193,6 @@ export const createSimulationState = (
         phases: [],
         step: 0,
       },
-      liquidMassTarget: mass.reduce((sum, value) => sum + value, 0),
       stepCount: 0,
       tau: DEFAULT_TAU,
     },

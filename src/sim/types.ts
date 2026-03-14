@@ -36,6 +36,7 @@ export type LatticeFields = {
   postDistributions: Float32Array;
   previousFill: Float32Array;
   previousRho: Float32Array;
+  provisionalFlags: Uint8Array;
   previousUx: Float32Array;
   previousUy: Float32Array;
   rho: Float32Array;
@@ -66,7 +67,6 @@ export type SimulationRuntime = {
   gravityY: number;
   hashingEnabled: boolean;
   latestDiagnostics: StepDiagnostics;
-  liquidMassTarget: number;
   stepCount: number;
   tau: number;
 };

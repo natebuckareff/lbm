@@ -4,6 +4,7 @@ import {
   DIRECTION_WEIGHTS,
   DIRECTIONS_X,
   DIRECTIONS_Y,
+  INTERFACE_FILL_FRACTION,
   OPPOSITE_DIRECTIONS,
 } from "./constants";
 import {
@@ -25,9 +26,13 @@ import {
 
 const MIN_DENSITY = 1e-4;
 const MIN_FILL = 0.05;
-const MAX_FILL = 0.95;
 const FILL_OFFSET = 1e-3;
 const MAX_SPEED = 0.25;
+const PROVISIONAL_FILL_EPSILON = 0.05;
+const EMPTY_MASS_THRESHOLD = MIN_FILL;
+const PROVISIONAL_SOLID = 0;
+const PROVISIONAL_LIQUID = 1;
+const PROVISIONAL_EMPTY = 2;
 
 const clamp = (value: number, min: number, max: number) => {
   if (value <= min) {
@@ -137,10 +142,7 @@ const collectNeighborStats = (
   };
 };
 
-const isZebraCandidate = (
-  flag: number,
-  neighborStats: ReturnType<typeof collectNeighborStats>,
-) => {
+const isZebraCandidate = (flag: number, neighborStats: ReturnType<typeof collectNeighborStats>) => {
   return (
     isLiquid(flag) &&
     neighborStats.touchesEmpty &&
@@ -251,10 +253,43 @@ const capturePhaseDiagnostics = (
   state.runtime.latestDiagnostics.phases.push(diagnostics);
 };
 
+const collectProvisionalNeighborStats = (
+  provisionalFlags: Uint8Array,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+) => {
+  let touchesLiquid = false;
+  let touchesEmpty = false;
+
+  for (let direction = 1; direction < DIRECTION_COUNT; direction += 1) {
+    const neighborX = x + DIRECTIONS_X[direction];
+    const neighborY = y + DIRECTIONS_Y[direction];
+
+    if (neighborX < 0 || neighborX >= width || neighborY < 0 || neighborY >= height) {
+      continue;
+    }
+
+    const neighborFlag = provisionalFlags[neighborY * width + neighborX];
+    if (neighborFlag === PROVISIONAL_LIQUID) {
+      touchesLiquid = true;
+    } else if (neighborFlag === PROVISIONAL_EMPTY) {
+      touchesEmpty = true;
+    }
+  }
+
+  return {
+    touchesEmpty,
+    touchesLiquid,
+  };
+};
+
 const averageLiquidNeighborhood = (
   state: SimulationState,
   x: number,
   y: number,
+  flags = state.domain.fields.flags,
 ) => {
   const { fields, width, height } = state.domain;
   let densitySum = 0;
@@ -271,7 +306,7 @@ const averageLiquidNeighborhood = (
     }
 
     const neighborIndex = neighborY * width + neighborX;
-    if (!isLiquid(fields.flags[neighborIndex])) {
+    if (!isLiquid(flags[neighborIndex])) {
       continue;
     }
 
@@ -557,334 +592,200 @@ const updateInterfaceMass = (state: SimulationState) => {
   }
 };
 
-const distributeExcessMass = (
-  state: SimulationState,
-  cellIndex: number,
-  excessMass: number,
-  filling: boolean,
-  flags: Uint8Array,
-) => {
-  if (Math.abs(excessMass) < 1e-7) {
-    return;
-  }
-
-  const { fields, width, height } = state.domain;
-  const x = cellIndex % width;
-  const y = Math.floor(cellIndex / width);
-  const weights: Array<[number, number]> = [];
-  let total = 0;
-
-  for (let direction = 1; direction < DIRECTION_COUNT; direction += 1) {
-    const neighborX = x + DIRECTIONS_X[direction];
-    const neighborY = y + DIRECTIONS_Y[direction];
-
-    if (neighborX < 0 || neighborX >= width || neighborY < 0 || neighborY >= height) {
-      continue;
-    }
-
-    const neighborIndex = neighborY * width + neighborX;
-    if (flags[neighborIndex] !== CELL_INTERFACE) {
-      continue;
-    }
-
-    const dot =
-      fields.normalX[cellIndex] * DIRECTIONS_X[direction] +
-      fields.normalY[cellIndex] * DIRECTIONS_Y[direction];
-    const weight = filling ? Math.max(dot, 0) : Math.max(-dot, 0);
-
-    if (weight > 0) {
-      weights.push([neighborIndex, weight]);
-      total += weight;
-    }
-  }
-
-  if (total === 0) {
-    for (let direction = 1; direction < DIRECTION_COUNT; direction += 1) {
-      const neighborX = x + DIRECTIONS_X[direction];
-      const neighborY = y + DIRECTIONS_Y[direction];
-
-      if (neighborX < 0 || neighborX >= width || neighborY < 0 || neighborY >= height) {
-        continue;
-      }
-
-      const neighborIndex = neighborY * width + neighborX;
-      if (flags[neighborIndex] === CELL_INTERFACE) {
-        weights.push([neighborIndex, 1]);
-        total += 1;
-      }
-    }
-  }
-
-  if (total === 0) {
-    return;
-  }
-
-  for (const [neighborIndex, weight] of weights) {
-    fields.mass[neighborIndex] += excessMass * (weight / total);
-  }
-};
-
-const setCellToFluid = (state: SimulationState, cellIndex: number) => {
-  const { fields } = state.domain;
-  const density = Math.max(fields.rho[cellIndex], MIN_DENSITY);
-  fields.flags[cellIndex] = CELL_FLUID;
-  fields.mass[cellIndex] = density;
-  fields.fill[cellIndex] = 1;
-};
-
-const setCellToInterface = (state: SimulationState, cellIndex: number) => {
-  const { fields } = state.domain;
-  const density = Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY);
-  fields.flags[cellIndex] = CELL_INTERFACE;
-  fields.mass[cellIndex] = clamp(fields.mass[cellIndex], 0, density);
-  fields.fill[cellIndex] = clamp(fields.mass[cellIndex] / density, 0, 1);
-};
-
-const setCellToEmpty = (state: SimulationState, cellIndex: number) => {
-  const { fields } = state.domain;
-  fields.flags[cellIndex] = CELL_EMPTY;
-  fields.mass[cellIndex] = 0;
-  fields.fill[cellIndex] = 0;
-  fields.rho[cellIndex] = ATMOSPHERIC_DENSITY;
-  fields.ux[cellIndex] = 0;
-  fields.uy[cellIndex] = 0;
-
-  for (let direction = 0; direction < DIRECTION_COUNT; direction += 1) {
-    fields.nextDistributions[pdfIndex(cellIndex, direction)] = 0;
-  }
-};
-
 const postProcessInterface = (state: SimulationState) => {
   const { fields, width, height } = state.domain;
-  const fills: number[] = [];
-  const empties: number[] = [];
-  const emptySet = new Set<number>();
+  const { provisionalFlags } = fields;
 
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const cellIndex = y * width + x;
-
-      if (fields.flags[cellIndex] !== CELL_INTERFACE) {
-        continue;
-      }
-
-      const density = Math.max(fields.rho[cellIndex], MIN_DENSITY);
-      const fill = clamp(fields.mass[cellIndex] / density, 0, 1);
-      fields.fill[cellIndex] = fill;
-
-      const neighborStats = collectNeighborStats(fields.flags, width, height, x, y);
-      const hasEmpty = neighborStats.touchesEmpty;
-      const hasFluid = neighborStats.touchesFluid;
-      const zebraCandidate = isZebraCandidate(CELL_INTERFACE, neighborStats);
-      const strongLiquidSupport = hasFluid && neighborStats.liquidNeighborCount >= 3;
-
-      if (
-        fields.mass[cellIndex] > (1 + FILL_OFFSET) * density ||
-        (!hasEmpty && hasFluid && !zebraCandidate)
-      ) {
-        fills.push(cellIndex);
-        continue;
-      }
-
-      if ((!hasFluid && fill < 0.05) || fields.mass[cellIndex] < -FILL_OFFSET * density) {
-        empties.push(cellIndex);
-        emptySet.add(cellIndex);
-      }
-    }
-  }
-
-  fields.nextFlags.set(fields.flags);
-
-  for (const cellIndex of fills) {
-    fields.nextFlags[cellIndex] = CELL_FLUID;
-  }
-
-  for (const cellIndex of empties) {
-    fields.nextFlags[cellIndex] = CELL_EMPTY;
-  }
-
-  for (const cellIndex of fills) {
+  for (let cellIndex = 0; cellIndex < fields.flags.length; cellIndex += 1) {
+    const flag = fields.flags[cellIndex];
+    const density = Math.max(fields.rho[cellIndex], MIN_DENSITY);
+    const fill = clamp(fields.mass[cellIndex] / density, 0, 1);
     const x = cellIndex % width;
     const y = Math.floor(cellIndex / width);
-    const targetMass = Math.max(fields.rho[cellIndex], MIN_DENSITY);
-    let excessMass = Math.max(fields.mass[cellIndex] - targetMass, 0);
-    const emptyNeighbors: number[] = [];
 
-    for (let direction = 1; direction < DIRECTION_COUNT; direction += 1) {
-      const neighborIndex = (y + DIRECTIONS_Y[direction]) * width + (x + DIRECTIONS_X[direction]);
-
-      if (fields.nextFlags[neighborIndex] !== CELL_EMPTY) {
-        continue;
-      }
-
-      const dot =
-        fields.normalX[cellIndex] * DIRECTIONS_X[direction] +
-        fields.normalY[cellIndex] * DIRECTIONS_Y[direction];
-
-      if (dot > 0) {
-        emptyNeighbors.push(neighborIndex);
-      }
+    if (flag === CELL_SOLID) {
+      provisionalFlags[cellIndex] = PROVISIONAL_SOLID;
+      continue;
     }
 
-    if (emptyNeighbors.length === 0) {
-      for (let direction = 1; direction < DIRECTION_COUNT; direction += 1) {
-        const neighborIndex = (y + DIRECTIONS_Y[direction]) * width + (x + DIRECTIONS_X[direction]);
-        if (fields.nextFlags[neighborIndex] === CELL_EMPTY) {
-          emptyNeighbors.push(neighborIndex);
-        }
-      }
+    if (flag === CELL_FLUID) {
+      provisionalFlags[cellIndex] = PROVISIONAL_LIQUID;
+      continue;
     }
 
-    if (excessMass > FILL_OFFSET && emptyNeighbors.length > 0) {
-      const seedMass = excessMass / emptyNeighbors.length;
-
-      for (const neighborIndex of emptyNeighbors) {
-        const average = averageLiquidNeighborhood(
-          state,
-          neighborIndex % width,
-          Math.floor(neighborIndex / width),
-        );
-        const clampedSeed = Math.min(
-          seedMass,
-          0.5 * Math.max(average.density, ATMOSPHERIC_DENSITY),
-        );
-
-        if (clampedSeed <= FILL_OFFSET) {
-          continue;
-        }
-
-        fields.nextFlags[neighborIndex] = CELL_INTERFACE;
-        fields.mass[neighborIndex] = clampedSeed;
-        fields.rho[neighborIndex] = Math.max(average.density, ATMOSPHERIC_DENSITY);
-        fields.ux[neighborIndex] = average.velocityX;
-        fields.uy[neighborIndex] = average.velocityY;
-        fields.fill[neighborIndex] = clamp(
-          fields.mass[neighborIndex] / fields.rho[neighborIndex],
-          0,
-          1,
-        );
-
-        for (let direction = 0; direction < DIRECTION_COUNT; direction += 1) {
-          fields.nextDistributions[pdfIndex(neighborIndex, direction)] = equilibrium(
-            direction,
-            fields.rho[neighborIndex],
-            fields.ux[neighborIndex],
-            fields.uy[neighborIndex],
-          );
-        }
-
-        excessMass -= clampedSeed;
-        emptySet.delete(neighborIndex);
-      }
+    if (flag === CELL_EMPTY) {
+      provisionalFlags[cellIndex] = PROVISIONAL_EMPTY;
+      continue;
     }
 
-    fields.mass[cellIndex] = targetMass + excessMass;
+    fields.fill[cellIndex] = fill;
+    const neighborStats = collectNeighborStats(fields.flags, width, height, x, y);
+
+    if (
+      fields.mass[cellIndex] > (1 + FILL_OFFSET) * density ||
+      (!neighborStats.touchesEmpty && neighborStats.touchesFluid)
+    ) {
+      provisionalFlags[cellIndex] = PROVISIONAL_LIQUID;
+      continue;
+    }
+
+    if (
+      fields.mass[cellIndex] < -FILL_OFFSET * density ||
+      (!neighborStats.touchesFluid && fill <= MIN_FILL)
+    ) {
+      provisionalFlags[cellIndex] = PROVISIONAL_EMPTY;
+      continue;
+    }
+
+    if (fill >= 0.5 + PROVISIONAL_FILL_EPSILON) {
+      provisionalFlags[cellIndex] = PROVISIONAL_LIQUID;
+    } else if (fill <= 0.5 - PROVISIONAL_FILL_EPSILON) {
+      provisionalFlags[cellIndex] = PROVISIONAL_EMPTY;
+    } else {
+      provisionalFlags[cellIndex] = neighborStats.touchesFluid
+        ? PROVISIONAL_LIQUID
+        : PROVISIONAL_EMPTY;
+    }
   }
 
-  for (const cellIndex of empties) {
-    if (!emptySet.has(cellIndex)) {
+  for (let cellIndex = 0; cellIndex < provisionalFlags.length; cellIndex += 1) {
+    const provisional = provisionalFlags[cellIndex];
+    if (provisional === PROVISIONAL_SOLID) {
+      fields.nextFlags[cellIndex] = CELL_SOLID;
+      continue;
+    }
+
+    const x = cellIndex % width;
+    const y = Math.floor(cellIndex / width);
+    const neighborStats = collectProvisionalNeighborStats(
+      provisionalFlags,
+      width,
+      height,
+      x,
+      y,
+    );
+
+    if (provisional === PROVISIONAL_LIQUID) {
+      fields.nextFlags[cellIndex] = neighborStats.touchesEmpty
+        ? CELL_INTERFACE
+        : CELL_FLUID;
+    } else {
+      fields.nextFlags[cellIndex] = CELL_EMPTY;
+    }
+  }
+
+  fields.nextMass.set(fields.mass);
+  fields.nextFill.fill(0);
+
+  for (let cellIndex = 0; cellIndex < provisionalFlags.length; cellIndex += 1) {
+    if (provisionalFlags[cellIndex] !== PROVISIONAL_EMPTY) {
       continue;
     }
 
     const x = cellIndex % width;
     const y = Math.floor(cellIndex / width);
 
-    for (let direction = 1; direction < DIRECTION_COUNT; direction += 1) {
-      const neighborIndex = (y + DIRECTIONS_Y[direction]) * width + (x + DIRECTIONS_X[direction]);
-
-      if (fields.nextFlags[neighborIndex] === CELL_FLUID) {
-        fields.nextFlags[neighborIndex] = CELL_INTERFACE;
-      }
+    if (hasNeighborType(fields.nextFlags, width, height, x, y, CELL_FLUID)) {
+      fields.nextFlags[cellIndex] = CELL_INTERFACE;
     }
   }
 
-  for (const cellIndex of fills) {
-    distributeExcessMass(
-      state,
-      cellIndex,
-      fields.mass[cellIndex] - Math.max(fields.rho[cellIndex], MIN_DENSITY),
-      true,
-      fields.nextFlags,
-    );
-    fields.mass[cellIndex] = Math.max(fields.rho[cellIndex], MIN_DENSITY);
-    fields.fill[cellIndex] = 1;
-  }
+  for (let cellIndex = 0; cellIndex < fields.flags.length; cellIndex += 1) {
+    const oldFlag = fields.flags[cellIndex];
+    const newFlag = fields.nextFlags[cellIndex];
+    const density = Math.max(fields.rho[cellIndex], MIN_DENSITY);
+    const stagedDensity = Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY);
+    const currentMass = clamp(fields.mass[cellIndex], 0, stagedDensity);
 
-  for (const cellIndex of empties) {
-    if (!emptySet.has(cellIndex)) {
+    if (newFlag === CELL_SOLID) {
+      fields.nextMass[cellIndex] = 0;
       continue;
     }
 
-    distributeExcessMass(
-      state,
-      cellIndex,
-      fields.mass[cellIndex],
-      false,
-      fields.nextFlags,
-    );
-    fields.mass[cellIndex] = 0;
-    fields.fill[cellIndex] = 0;
+    if (oldFlag === CELL_FLUID) {
+      fields.nextMass[cellIndex] = density;
+      continue;
+    }
+
+    if (oldFlag === CELL_EMPTY && newFlag === CELL_EMPTY) {
+      fields.nextMass[cellIndex] = 0;
+      continue;
+    }
+
+    if (oldFlag === CELL_EMPTY && newFlag === CELL_INTERFACE) {
+      const x = cellIndex % width;
+      const y = Math.floor(cellIndex / width);
+      const average = averageLiquidNeighborhood(state, x, y, fields.nextFlags);
+      const seededDensity = Math.max(average.density, ATMOSPHERIC_DENSITY);
+      const seededMass = INTERFACE_FILL_FRACTION * seededDensity;
+      fields.nextMass[cellIndex] = seededMass;
+      fields.rho[cellIndex] = seededDensity;
+      fields.ux[cellIndex] = average.velocityX;
+      fields.uy[cellIndex] = average.velocityY;
+
+      for (let direction = 0; direction < DIRECTION_COUNT; direction += 1) {
+        fields.nextDistributions[pdfIndex(cellIndex, direction)] = equilibrium(
+          direction,
+          seededDensity,
+          fields.ux[cellIndex],
+          fields.uy[cellIndex],
+        );
+      }
+      continue;
+    }
+
+    if (oldFlag === CELL_INTERFACE && newFlag === CELL_FLUID) {
+      if (currentMass >= density - FILL_OFFSET) {
+        fields.nextMass[cellIndex] = density;
+      } else {
+        fields.nextFlags[cellIndex] = CELL_INTERFACE;
+        fields.nextMass[cellIndex] = currentMass;
+      }
+      continue;
+    }
+
+    if (oldFlag === CELL_INTERFACE && newFlag === CELL_EMPTY) {
+      if (currentMass > EMPTY_MASS_THRESHOLD * stagedDensity) {
+        fields.nextFlags[cellIndex] = CELL_INTERFACE;
+        fields.nextMass[cellIndex] = currentMass;
+      } else {
+        fields.nextMass[cellIndex] = 0;
+      }
+
+      continue;
+    }
+
+    if (oldFlag === CELL_INTERFACE && newFlag === CELL_INTERFACE) {
+      fields.nextMass[cellIndex] = currentMass;
+    }
+  }
+
+  for (let cellIndex = 0; cellIndex < fields.flags.length; cellIndex += 1) {
+    if (fields.nextFlags[cellIndex] !== CELL_INTERFACE || fields.flags[cellIndex] !== CELL_EMPTY) {
+      continue;
+    }
+
+    if (fields.nextMass[cellIndex] <= FILL_OFFSET) {
+      fields.nextFlags[cellIndex] = CELL_EMPTY;
+      fields.nextMass[cellIndex] = 0;
+    }
+  }
+
+  for (let cellIndex = 0; cellIndex < fields.flags.length; cellIndex += 1) {
+    if (fields.nextFlags[cellIndex] !== CELL_FLUID) {
+      continue;
+    }
+
+    const x = cellIndex % width;
+    const y = Math.floor(cellIndex / width);
+    if (hasNeighborType(fields.nextFlags, width, height, x, y, CELL_EMPTY)) {
+      fields.nextFlags[cellIndex] = CELL_INTERFACE;
+      fields.nextMass[cellIndex] = Math.max(fields.rho[cellIndex], MIN_DENSITY);
+    }
   }
 
   fields.flags.set(fields.nextFlags);
-
-  for (let iteration = 0; iteration < 4; iteration += 1) {
-    let changed = false;
-
-    for (let y = 1; y < height - 1; y += 1) {
-      for (let x = 1; x < width - 1; x += 1) {
-        const cellIndex = y * width + x;
-        const flag = fields.flags[cellIndex];
-        if (!isLiquid(flag)) {
-          continue;
-        }
-
-        const neighborStats = collectNeighborStats(fields.flags, width, height, x, y);
-        const density = Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY);
-        const fill = clamp(fields.mass[cellIndex] / density, 0, 1);
-        const zebraCandidate = isZebraCandidate(flag, neighborStats);
-        const strongLiquidSupport =
-          neighborStats.touchesFluid && neighborStats.liquidNeighborCount >= 3;
-
-        if (flag === CELL_FLUID) {
-          if (neighborStats.touchesEmpty || zebraCandidate) {
-            setCellToInterface(state, cellIndex);
-            changed = true;
-          }
-          continue;
-        }
-
-        if (zebraCandidate) {
-          if (neighborStats.touchesFluid) {
-            setCellToInterface(state, cellIndex);
-          } else {
-            setCellToEmpty(state, cellIndex);
-          }
-          changed = true;
-          continue;
-        }
-
-        if (!neighborStats.touchesFluid) {
-          setCellToEmpty(state, cellIndex);
-          changed = true;
-          continue;
-        }
-
-        if (!neighborStats.touchesEmpty) {
-          if (neighborStats.touchesFluid) {
-            setCellToFluid(state, cellIndex);
-          } else {
-            setCellToEmpty(state, cellIndex);
-          }
-          changed = true;
-        }
-      }
-    }
-
-    if (!changed) {
-      break;
-    }
-  }
+  fields.mass.set(fields.nextMass);
 
   for (let cellIndex = 0; cellIndex < fields.flags.length; cellIndex += 1) {
     const flag = fields.flags[cellIndex];
@@ -892,12 +793,16 @@ const postProcessInterface = (state: SimulationState) => {
     if (flag === CELL_FLUID) {
       fields.mass[cellIndex] = Math.max(fields.rho[cellIndex], MIN_DENSITY);
       fields.fill[cellIndex] = 1;
+      fields.nextFill[cellIndex] = 1;
     } else if (flag === CELL_INTERFACE) {
       const density = Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY);
-      fields.fill[cellIndex] = clamp(fields.mass[cellIndex] / density, 0, 1);
+      const fill = clamp(fields.mass[cellIndex] / density, 0, 1);
+      fields.fill[cellIndex] = fill;
+      fields.nextFill[cellIndex] = fill;
     } else if (flag === CELL_EMPTY || flag === CELL_SOLID) {
       fields.mass[cellIndex] = 0;
       fields.fill[cellIndex] = 0;
+      fields.nextFill[cellIndex] = 0;
       fields.rho[cellIndex] = flag === CELL_EMPTY ? ATMOSPHERIC_DENSITY : 0;
       fields.ux[cellIndex] = 0;
       fields.uy[cellIndex] = 0;
@@ -906,111 +811,6 @@ const postProcessInterface = (state: SimulationState) => {
         fields.nextDistributions[pdfIndex(cellIndex, direction)] = 0;
       }
     }
-  }
-};
-
-const applyMassConservation = (state: SimulationState) => {
-  const { fields } = state.domain;
-  const targetMass = state.runtime.liquidMassTarget;
-
-  if (!(targetMass > 0)) {
-    let totalMass = 0;
-    for (let cellIndex = 0; cellIndex < fields.flags.length; cellIndex += 1) {
-      if (fields.flags[cellIndex] === CELL_FLUID) {
-        totalMass += fields.rho[cellIndex];
-      } else if (fields.flags[cellIndex] === CELL_INTERFACE) {
-        totalMass += fields.mass[cellIndex];
-      }
-    }
-    state.runtime.liquidMassTarget = totalMass;
-    return;
-  }
-
-  let currentMass = 0;
-  const interfaceCells: number[] = [];
-  const fluidCells: number[] = [];
-
-  for (let cellIndex = 0; cellIndex < fields.flags.length; cellIndex += 1) {
-    if (fields.flags[cellIndex] === CELL_FLUID) {
-      currentMass += fields.rho[cellIndex];
-      fluidCells.push(cellIndex);
-    } else if (fields.flags[cellIndex] === CELL_INTERFACE) {
-      currentMass += fields.mass[cellIndex];
-      interfaceCells.push(cellIndex);
-    }
-  }
-
-  let delta = targetMass - currentMass;
-
-  const applyToInterface = (remaining: number) => {
-    if (interfaceCells.length === 0 || Math.abs(remaining) < 1e-9) {
-      return remaining;
-    }
-
-    let totalWeight = 0;
-    const weights: Array<[number, number, number]> = [];
-
-    for (const cellIndex of interfaceCells) {
-      const density = Math.max(fields.rho[cellIndex], ATMOSPHERIC_DENSITY);
-      const weight =
-        remaining >= 0
-          ? Math.max(density - fields.mass[cellIndex], 1e-6)
-          : Math.max(fields.mass[cellIndex], 1e-6);
-      weights.push([cellIndex, weight, density]);
-      totalWeight += weight;
-    }
-
-    let rest = remaining;
-    for (const [cellIndex, weight, density] of weights) {
-      const share = remaining * (weight / totalWeight);
-      const nextMass = clamp(fields.mass[cellIndex] + share, 0, density);
-      const applied = nextMass - fields.mass[cellIndex];
-      fields.mass[cellIndex] = nextMass;
-      fields.fill[cellIndex] = clamp(nextMass / density, 0, 1);
-      rest -= applied;
-    }
-
-    return rest;
-  };
-
-  const applyToFluid = (remaining: number) => {
-    if (fluidCells.length === 0 || Math.abs(remaining) < 1e-9) {
-      return remaining;
-    }
-
-    let totalWeight = 0;
-    const weights: Array<[number, number]> = [];
-
-    for (const cellIndex of fluidCells) {
-      const weight =
-        remaining >= 0
-          ? Math.max(fields.rho[cellIndex], 1e-6)
-          : Math.max(fields.rho[cellIndex] - MIN_DENSITY, 1e-6);
-      weights.push([cellIndex, weight]);
-      totalWeight += weight;
-    }
-
-    let rest = remaining;
-    for (const [cellIndex, weight] of weights) {
-      const share = remaining * (weight / totalWeight);
-      const nextDensity =
-        remaining >= 0
-          ? fields.rho[cellIndex] + share
-          : Math.max(MIN_DENSITY, fields.rho[cellIndex] + share);
-      const applied = nextDensity - fields.rho[cellIndex];
-      fillEquilibriumCell(state, cellIndex, nextDensity, fields.ux[cellIndex], fields.uy[cellIndex]);
-      fields.mass[cellIndex] = nextDensity;
-      rest -= applied;
-    }
-
-    return rest;
-  };
-
-  delta = applyToInterface(delta);
-  delta = applyToFluid(delta);
-
-  if (Math.abs(delta) > 1e-5) {
-    applyToInterface(delta);
   }
 };
 
@@ -1037,10 +837,6 @@ export const updateFreeSurface = (state: SimulationState) => {
   postProcessInterface(state);
   if (state.runtime.diagnosticsEnabled) {
     capturePhaseDiagnostics(state, "post");
-  }
-  applyMassConservation(state);
-  if (state.runtime.diagnosticsEnabled) {
-    capturePhaseDiagnostics(state, "conservation");
   }
 };
 
