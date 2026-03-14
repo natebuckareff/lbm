@@ -191,17 +191,11 @@ const formatBoolean = (value: boolean) => (value ? "yes" : "no");
 
 const renderDiagnosticsSummary = (info: CellDebugInfo | null) => {
   const diagnostics = info?.latestDiagnostics;
+  const step = diagnostics?.step ?? 0;
+  const hashHex = info?.currentTickHashHex ?? "0000000000000000";
 
-  if (!diagnostics || diagnostics.phases.length === 0) {
-    return `
-      <div class="inspector-section">
-        <div class="inspector-section-title">Last Step</div>
-        <div class="inspector-empty">No step diagnostics yet.</div>
-      </div>
-    `;
-  }
-
-  const phaseRows = diagnostics.phases
+  const phaseRows = diagnostics?.phases
+    ? diagnostics.phases
     .map(
       (phase: PhaseDiagnostics) => `
         <tr>
@@ -214,11 +208,20 @@ const renderDiagnosticsSummary = (info: CellDebugInfo | null) => {
         </tr>
       `,
     )
-    .join("");
+    .join("")
+    : "";
 
   return `
     <div class="inspector-section">
-      <div class="inspector-section-title">Last Step #${diagnostics.step}</div>
+      <div class="inspector-section-title">Run</div>
+      <div class="inspector-grid">
+        <div class="inspector-label">Tick</div><div>${step}</div>
+        <div class="inspector-label">Chain Hash</div><div class="inspector-hash">${hashHex}</div>
+      </div>
+    </div>
+    <div class="inspector-section">
+      <div class="inspector-section-title">Last Step #${step}</div>
+      ${diagnostics && diagnostics.phases.length > 0 ? `
       <table class="inspector-table">
         <thead>
           <tr>
@@ -232,6 +235,7 @@ const renderDiagnosticsSummary = (info: CellDebugInfo | null) => {
         </thead>
         <tbody>${phaseRows}</tbody>
       </table>
+      ` : `<div class="inspector-empty">No step diagnostics yet.</div>`}
     </div>
   `;
 };

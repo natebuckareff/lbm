@@ -55,6 +55,8 @@ export type SimulationDomain = {
 
 export type SimulationRuntime = {
   accumulatorSeconds: number;
+  currentTickHash: bigint;
+  currentTickHashHex: string;
   debugPreviousFill: Float32Array;
   debugPreviousFlags: Uint8Array;
   debugPreviousMass: Float32Array;
@@ -106,6 +108,7 @@ export type CellDebugInfo = {
   flag: CellFlag;
   interfaceWithoutEmpty: boolean;
   interfaceWithoutFluid: boolean;
+  currentTickHashHex: string;
   latestDiagnostics: StepDiagnostics;
   mass: number;
   liquidNeighborCount: number;

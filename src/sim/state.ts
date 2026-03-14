@@ -8,6 +8,7 @@ import {
   INITIAL_VELOCITY_Y,
 } from "./constants";
 import { createChunks } from "./chunks";
+import { createHashSeed, formatHashHex } from "./hash";
 import { equilibrium } from "./lattice";
 import {
   CELL_EMPTY,
@@ -176,6 +177,8 @@ export const createSimulationState = (
     },
     runtime: {
       accumulatorSeconds: 0,
+      currentTickHash: createHashSeed(),
+      currentTickHashHex: formatHashHex(createHashSeed()),
       debugPreviousFill,
       debugPreviousFlags,
       debugPreviousMass,

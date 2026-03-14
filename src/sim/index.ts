@@ -4,6 +4,7 @@ import {
   MAX_STEPS_PER_FRAME,
   STEPS_PER_SECOND,
 } from "./constants";
+import { formatHashHex, hashSimulationTick } from "./hash";
 import { stepChunk, swapDistributionBuffers, updateFreeSurface } from "./lbm";
 import { renderState, type VisualizationMode } from "./render";
 import { createSimulationState } from "./state";
@@ -64,6 +65,16 @@ const advanceOneFixedStep = (state: SimulationState) => {
 
   updateFreeSurface(state);
   swapDistributionBuffers(state);
+  const { fields } = state.domain;
+  const nextHash = hashSimulationTick(
+    state.runtime.currentTickHash,
+    fields.flags,
+    fields.fill,
+    fields.ux,
+    fields.uy,
+  );
+  state.runtime.currentTickHash = nextHash;
+  state.runtime.currentTickHashHex = formatHashHex(nextHash);
 };
 
 const renderSimulation = (
@@ -148,6 +159,7 @@ const inspectCell = (
 
   return {
     alternatingNeighborCount,
+    currentTickHashHex: state.runtime.currentTickHashHex,
     fill: fields.fill[cellIndex],
     flag: fields.flags[cellIndex] as CellFlag,
     interfaceWithoutEmpty:

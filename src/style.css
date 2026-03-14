@@ -341,6 +341,11 @@ body {
   font-size: 0.68rem;
 }
 
+.inspector-hash {
+  font-family: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
+  overflow-wrap: anywhere;
+}
+
 .app-shell.is-collapsed .side-panel h1,
 .app-shell.is-collapsed .side-panel-body {
   display: none;
