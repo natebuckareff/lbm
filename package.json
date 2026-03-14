@@ -1,0 +1,8 @@
+{
+  "name": "boltzmann2",
+  "private": true,
+  "scripts": {
+    "dev": "bun ./index.html",
+    "build": "bun build ./index.html --outdir dist --minify"
+  }
+}
