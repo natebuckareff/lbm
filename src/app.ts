@@ -55,6 +55,8 @@ const chunkGridToggle =
   document.querySelector<HTMLInputElement>(".chunk-grid-toggle");
 const interpolationToggle =
   document.querySelector<HTMLInputElement>(".interpolation-toggle");
+const hashingToggle =
+  document.querySelector<HTMLInputElement>(".hashing-toggle");
 
 if (!appRoot) {
   throw new Error("Expected #app mount element");
@@ -85,7 +87,8 @@ if (
   !rotationSlider ||
   !rotationValue ||
   !chunkGridToggle ||
-  !interpolationToggle
+  !interpolationToggle ||
+  !hashingToggle
 ) {
   throw new Error("Expected app layout elements in index.html");
 }
@@ -128,6 +131,7 @@ let gravityMagnitude = DEFAULT_GRAVITY;
 let rotationDegrees = DEFAULT_ROTATION_DEGREES;
 let isChunkGridVisible = false;
 let isInterpolationEnabled = false;
+let isHashingEnabled = false;
 let hoveredCellX = -1;
 let hoveredCellY = -1;
 
@@ -318,6 +322,7 @@ const renderChunkGrid = () => {
 const renderCurrentFrame = (dt: number) => {
   animate(animationBuffer, dt, {
     gravityMagnitude,
+    hashingEnabled: isHashingEnabled,
     interpolationEnabled: isInterpolationEnabled,
     rotationRadians: (rotationDegrees * Math.PI) / 180,
     tau,
@@ -348,6 +353,7 @@ const applyPendingGridSize = () => {
 const stepCurrentFrame = () => {
   stepAnimation(animationBuffer, {
     gravityMagnitude,
+    hashingEnabled: isHashingEnabled,
     interpolationEnabled: isInterpolationEnabled,
     rotationRadians: (rotationDegrees * Math.PI) / 180,
     tau,
@@ -617,6 +623,11 @@ chunkGridToggle.addEventListener("change", () => {
 
 interpolationToggle.addEventListener("change", () => {
   isInterpolationEnabled = interpolationToggle.checked;
+  renderCurrentFrame(0);
+});
+
+hashingToggle.addEventListener("change", () => {
+  isHashingEnabled = hashingToggle.checked;
   renderCurrentFrame(0);
 });
 

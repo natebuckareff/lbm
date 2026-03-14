@@ -63,6 +63,7 @@ export type SimulationRuntime = {
   debugPreviousRho: Float32Array;
   gravityX: number;
   gravityY: number;
+  hashingEnabled: boolean;
   latestDiagnostics: StepDiagnostics;
   liquidMassTarget: number;
   stepCount: number;

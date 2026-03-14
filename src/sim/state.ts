@@ -185,6 +185,7 @@ export const createSimulationState = (
       debugPreviousRho,
       gravityX: 0,
       gravityY: 0,
+      hashingEnabled: false,
       latestDiagnostics: {
         phases: [],
         step: 0,
