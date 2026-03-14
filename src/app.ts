@@ -198,8 +198,8 @@ let isChunkGridVisible = false;
 let isInterpolationEnabled = false;
 let isHashingEnabled = false;
 let isDiagnosticsEnabled = false;
-let hoveredCellX = -1;
-let hoveredCellY = -1;
+let inspectedCellX = -1;
+let inspectedCellY = -1;
 const recorder = createRecorderState();
 type ControlChangeSource = "user" | "replay" | "load";
 type ReplayMismatch = {
@@ -697,7 +697,7 @@ const renderDiagnosticsSummary = (info: CellDebugInfo | null) => {
 };
 
 const updateInspector = () => {
-  if (hoveredCellX < 0 || hoveredCellY < 0) {
+  if (inspectedCellX < 0 || inspectedCellY < 0) {
     const info = inspectSimulationCell(animationBuffer, 0, 0);
     inspectorBody.innerHTML = `
       ${renderDiagnosticsSummary(info)}
@@ -706,13 +706,15 @@ const updateInspector = () => {
     return;
   }
 
-  const info = inspectSimulationCell(animationBuffer, hoveredCellX, hoveredCellY);
+  const info = inspectSimulationCell(animationBuffer, inspectedCellX, inspectedCellY);
 
   if (info === null) {
     const fallbackInfo = inspectSimulationCell(animationBuffer, 0, 0);
+    inspectedCellX = -1;
+    inspectedCellY = -1;
     inspectorBody.innerHTML = `
       ${renderDiagnosticsSummary(fallbackInfo)}
-      <div class="inspector-empty">Pointer is outside the simulation domain.</div>
+      <div class="inspector-empty">Hover the simulation to inspect a cell.</div>
     `;
     return;
   }
@@ -812,7 +814,6 @@ const applyPendingGridSize = () => {
   recreateFrameBuffer(nextWidth, nextHeight);
   resetSimulation();
   renderCurrentFrame(0);
-  resetCanvasView();
 };
 
 const stepCurrentFrame = () => {
@@ -1324,14 +1325,17 @@ workspaceView.addEventListener("pointermove", (event) => {
   const localX = event.clientX - rect.left;
   const localY = event.clientY - rect.top;
   const gridCoordinates = getGridCoordinatesFromWorkspacePoint(localX, localY);
-  hoveredCellX = gridCoordinates.x;
-  hoveredCellY = gridCoordinates.y;
+  const info = inspectSimulationCell(animationBuffer, gridCoordinates.x, gridCoordinates.y);
+
+  if (info !== null) {
+    inspectedCellX = info.x;
+    inspectedCellY = info.y;
+  }
+
   updateInspector();
 });
 
 workspaceView.addEventListener("pointerleave", () => {
-  hoveredCellX = -1;
-  hoveredCellY = -1;
   updateInspector();
 });
 
