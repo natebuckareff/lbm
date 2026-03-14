@@ -124,6 +124,11 @@ const sampleDensityPalette = (normalizedDensity: number) => {
   return stops[stops.length - 1].color;
 };
 
+const remapSpeedNormalized = (speed: number) => {
+  const normalized = Math.max(0, Math.min(1, speed / 0.18));
+  return Math.pow(normalized, 0.78);
+};
+
 export const renderState = (
   state: SimulationState,
   pixels: Uint8ClampedArray,
@@ -203,7 +208,7 @@ export const renderState = (
 
     const color = mode === "density"
       ? sampleDensityPalette(Math.max(0, Math.min(1, (state.domain.fields.rho[cellIndex] - 0.94) / 0.12)))
-      : sampleSpeedPalette(Math.min(Math.sqrt(velocityX * velocityX + velocityY * velocityY) * 34, 1));
+      : sampleSpeedPalette(remapSpeedNormalized(Math.sqrt(velocityX * velocityX + velocityY * velocityY)));
     const mixed = blendColor(AIR_COLOR, color, interpolatedFill);
 
     pixels[pixelBase] = clampChannel(mixed.red);
