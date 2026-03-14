@@ -6,6 +6,7 @@ import {
   stepAnimation,
 } from "./animate";
 import {
+  appendOrCoalesceRecordedAction,
   buildRecording,
   createRecorderState,
   nextRecordedActionPosition,
@@ -176,7 +177,10 @@ const pushRecordedAction = (
 
   const runInfo = getRunInfo();
   const seq = nextRecordedActionPosition(recorder, runInfo.stepCount);
-  recorder.actions.push(createAction(runInfo.stepCount, seq, getRecordedHash()));
+  appendOrCoalesceRecordedAction(
+    recorder,
+    createAction(runInfo.stepCount, seq, getRecordedHash()),
+  );
   updateRecordingUi();
 };
 
@@ -623,7 +627,7 @@ recordingToggleButton.addEventListener("click", () => {
 
   const runInfo = getRunInfo();
   const seq = nextRecordedActionPosition(recorder, runInfo.stepCount);
-  recorder.actions.push({
+  appendOrCoalesceRecordedAction(recorder, {
     tick: runInfo.stepCount,
     seq,
     hash: getRecordedHash(),

@@ -71,6 +71,32 @@ export const nextRecordedActionPosition = (
   return 0;
 };
 
+const canCoalesceActionType = (
+  type: RecordedSimulationAction["type"],
+) => type !== "start_sim";
+
+export const appendOrCoalesceRecordedAction = (
+  recorder: RecorderState,
+  action: RecordedSimulationAction,
+) => {
+  const previous = recorder.actions.at(-1);
+
+  if (
+    previous &&
+    canCoalesceActionType(previous.type) &&
+    previous.tick === action.tick &&
+    previous.type === action.type
+  ) {
+    recorder.actions[recorder.actions.length - 1] = {
+      ...action,
+      seq: previous.seq,
+    };
+    return;
+  }
+
+  recorder.actions.push(action);
+};
+
 export const buildRecording = (
   recorder: RecorderState,
 ): SimulationRecording => ({
