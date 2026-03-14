@@ -338,10 +338,16 @@ const updateReplayUi = () => {
     : replay.isCompleted
     ? "completed"
     : "running";
+  const visualState = replay.isDiverged
+    ? "error"
+    : replay.isCompleted && getIsReplayLoaded()
+    ? "success"
+    : "neutral";
   const currentTick = getIsReplayLoaded() ? getRunInfo().stepCount : null;
   const nextActionTick = getNextReplayAction()?.tick ?? "done";
   const mismatch = replay.mismatch;
 
+  replayStatus.dataset.state = visualState;
   replayStatus.innerHTML = `
     <div><span class="replay-status-label">Replay</span> ${stateLabel}</div>
     <div><span class="replay-status-label">Name</span> ${replay.recording?.name ?? "n/a"}</div>

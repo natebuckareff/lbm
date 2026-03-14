@@ -223,11 +223,31 @@ body {
   font-size: 0.68rem;
 }
 
+.replay-status[data-state="success"] {
+  border-color: #2f8f52;
+  background: #10281a;
+  color: #dff7e7;
+}
+
+.replay-status[data-state="error"] {
+  border-color: #a34747;
+  background: #2a1316;
+  color: #ffe2e2;
+}
+
 .recording-status-label,
 .replay-status-label {
   color: #99a9bb;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.replay-status[data-state="success"] .replay-status-label {
+  color: #8ed0a4;
+}
+
+.replay-status[data-state="error"] .replay-status-label {
+  color: #f0a3a3;
 }
 
 .modal-overlay {
