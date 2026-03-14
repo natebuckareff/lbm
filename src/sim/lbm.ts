@@ -1027,13 +1027,21 @@ export const updateFreeSurface = (state: SimulationState) => {
   computeInterfaceNormals(state);
   streamDistributions(state);
   recomputeMacroscopicFields(state);
-  capturePhaseDiagnostics(state, "stream");
+  if (state.runtime.diagnosticsEnabled) {
+    capturePhaseDiagnostics(state, "stream");
+  }
   updateInterfaceMass(state);
-  capturePhaseDiagnostics(state, "mass");
+  if (state.runtime.diagnosticsEnabled) {
+    capturePhaseDiagnostics(state, "mass");
+  }
   postProcessInterface(state);
-  capturePhaseDiagnostics(state, "post");
+  if (state.runtime.diagnosticsEnabled) {
+    capturePhaseDiagnostics(state, "post");
+  }
   applyMassConservation(state);
-  capturePhaseDiagnostics(state, "conservation");
+  if (state.runtime.diagnosticsEnabled) {
+    capturePhaseDiagnostics(state, "conservation");
+  }
 };
 
 export const swapDistributionBuffers = (state: SimulationState) => {

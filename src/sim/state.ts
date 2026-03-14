@@ -179,6 +179,7 @@ export const createSimulationState = (
       accumulatorSeconds: 0,
       currentTickHash: createHashSeed(),
       currentTickHashHex: formatHashHex(createHashSeed()),
+      diagnosticsEnabled: false,
       debugPreviousFill,
       debugPreviousFlags,
       debugPreviousMass,

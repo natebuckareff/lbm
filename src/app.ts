@@ -75,6 +75,8 @@ const interpolationToggle =
   document.querySelector<HTMLInputElement>(".interpolation-toggle");
 const hashingToggle =
   document.querySelector<HTMLInputElement>(".hashing-toggle");
+const diagnosticsToggle =
+  document.querySelector<HTMLInputElement>(".diagnostics-toggle");
 const recordingNameInput =
   document.querySelector<HTMLInputElement>(".recording-name-input");
 const recordingStatus =
@@ -137,6 +139,7 @@ if (
   !chunkGridToggle ||
   !interpolationToggle ||
   !hashingToggle ||
+  !diagnosticsToggle ||
   !recordingNameInput ||
   !recordingStatus ||
   !replayStatus ||
@@ -194,6 +197,7 @@ let rotationDegrees = DEFAULT_ROTATION_DEGREES;
 let isChunkGridVisible = false;
 let isInterpolationEnabled = false;
 let isHashingEnabled = false;
+let isDiagnosticsEnabled = false;
 let hoveredCellX = -1;
 let hoveredCellY = -1;
 const recorder = createRecorderState();
@@ -231,6 +235,7 @@ const getRecordedHash = () => {
 };
 
 const getCurrentStepInputs = () => ({
+  diagnosticsEnabled: isDiagnosticsEnabled,
   gravityMagnitude,
   hashingEnabled: isHashingEnabled,
   rotationRadians: (rotationDegrees * Math.PI) / 180,
@@ -255,6 +260,7 @@ const updateControlLocks = () => {
   gravitySlider.disabled = replayLoaded;
   rotationSlider.disabled = replayLoaded;
   hashingToggle.disabled = replayLoaded;
+  diagnosticsToggle.disabled = false;
   recordingNameInput.disabled = recorder.isRecording || replayLoaded;
 };
 
@@ -640,6 +646,7 @@ const renderDiagnosticsSummary = (info: CellDebugInfo | null) => {
   const diagnostics = info?.latestDiagnostics;
   const step = diagnostics?.step ?? 0;
   const hashHex = info?.currentTickHashHex ?? "0000000000000000";
+  const diagnosticsEnabled = getRunInfo().diagnosticsEnabled;
 
   const phaseRows = diagnostics?.phases
     ? diagnostics.phases
@@ -668,7 +675,9 @@ const renderDiagnosticsSummary = (info: CellDebugInfo | null) => {
     </div>
     <div class="inspector-section">
       <div class="inspector-section-title">Last Step #${step}</div>
-      ${diagnostics && diagnostics.phases.length > 0 ? `
+      ${!diagnosticsEnabled
+        ? `<div class="inspector-empty">Phase diagnostics are disabled.</div>`
+        : diagnostics && diagnostics.phases.length > 0 ? `
       <table class="inspector-table">
         <thead>
           <tr>
@@ -774,6 +783,7 @@ const renderCurrentFrame = (dt: number) => {
       applyReplayActionsForCurrentTick();
       return replay.isCompleted || replay.isDiverged ? false : getCurrentStepInputs();
     },
+    diagnosticsEnabled: isDiagnosticsEnabled,
     gravityMagnitude,
     hashingEnabled: isHashingEnabled,
     interpolationEnabled: isInterpolationEnabled,
@@ -817,6 +827,7 @@ const stepCurrentFrame = () => {
     },
     beforeFixedStep: () =>
       replay.isCompleted || replay.isDiverged ? false : getCurrentStepInputs(),
+    diagnosticsEnabled: isDiagnosticsEnabled,
     gravityMagnitude,
     hashingEnabled: isHashingEnabled,
     interpolationEnabled: isInterpolationEnabled,
@@ -1172,6 +1183,11 @@ interpolationToggle.addEventListener("change", () => {
 
 hashingToggle.addEventListener("change", () => {
   applyHashingEnabled(hashingToggle.checked, true);
+});
+
+diagnosticsToggle.addEventListener("change", () => {
+  isDiagnosticsEnabled = diagnosticsToggle.checked;
+  renderCurrentFrame(0);
 });
 
 const COLLAPSED_INSPECTOR_HEIGHT = 24;

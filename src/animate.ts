@@ -13,6 +13,7 @@ export type AnimationOptions = {
   beforeFixedStep?: () =>
     | false
     | {
+        diagnosticsEnabled: boolean;
         gravityMagnitude: number;
         hashingEnabled: boolean;
         rotationRadians: number;
@@ -20,6 +21,7 @@ export type AnimationOptions = {
       }
     | void;
   gravityMagnitude: number;
+  diagnosticsEnabled: boolean;
   hashingEnabled: boolean;
   interpolationEnabled: boolean;
   rotationRadians: number;
@@ -64,6 +66,7 @@ export const animate = (
     dt,
     buffer.pixels,
     options.visualizationMode,
+    options.diagnosticsEnabled,
     options.hashingEnabled,
     options.interpolationEnabled,
     options.tau,
@@ -87,6 +90,7 @@ export const stepAnimation = (
   simulation.stepOnce(
     buffer.pixels,
     options.visualizationMode,
+    options.diagnosticsEnabled,
     options.hashingEnabled,
     options.interpolationEnabled,
     options.tau,

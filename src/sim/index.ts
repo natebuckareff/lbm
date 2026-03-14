@@ -35,6 +35,7 @@ export type Simulation = {
     dt: number,
     pixels: Uint8ClampedArray,
     mode: VisualizationMode,
+    diagnosticsEnabled: boolean,
     hashingEnabled: boolean,
     interpolationEnabled: boolean,
     tau: number,
@@ -43,6 +44,7 @@ export type Simulation = {
     beforeFixedStep?: () =>
       | false
       | {
+          diagnosticsEnabled: boolean;
           gravityMagnitude: number;
           hashingEnabled: boolean;
           rotationRadians: number;
@@ -54,6 +56,7 @@ export type Simulation = {
   stepOnce: (
     pixels: Uint8ClampedArray,
     mode: VisualizationMode,
+    diagnosticsEnabled: boolean,
     hashingEnabled: boolean,
     interpolationEnabled: boolean,
     tau: number,
@@ -62,6 +65,7 @@ export type Simulation = {
     beforeFixedStep?: () =>
       | false
       | {
+          diagnosticsEnabled: boolean;
           gravityMagnitude: number;
           hashingEnabled: boolean;
           rotationRadians: number;
@@ -106,12 +110,14 @@ const advanceOneFixedStep = (state: SimulationState) => {
 const applyStepInputs = (
   state: SimulationState,
   inputs: {
+    diagnosticsEnabled: boolean;
     gravityMagnitude: number;
     hashingEnabled: boolean;
     rotationRadians: number;
     tau: number;
   },
 ) => {
+  state.runtime.diagnosticsEnabled = inputs.diagnosticsEnabled;
   state.runtime.hashingEnabled = inputs.hashingEnabled;
   state.runtime.tau = inputs.tau;
   state.runtime.gravityX = inputs.gravityMagnitude * Math.sin(inputs.rotationRadians);
@@ -240,6 +246,7 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
     inspectRun() {
       return {
         currentTickHashHex: state.runtime.currentTickHashHex,
+        diagnosticsEnabled: state.runtime.diagnosticsEnabled,
         hashingEnabled: state.runtime.hashingEnabled,
         stepCount: state.runtime.stepCount,
       };
@@ -248,6 +255,7 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
       dt,
       pixels,
       mode,
+      diagnosticsEnabled,
       hashingEnabled,
       interpolationEnabled,
       tau,
@@ -271,6 +279,7 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
           break;
         }
         applyStepInputs(state, nextInputs ?? {
+          diagnosticsEnabled,
           gravityMagnitude,
           hashingEnabled,
           rotationRadians,
@@ -287,6 +296,7 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
     stepOnce(
       pixels,
       mode,
+      diagnosticsEnabled,
       hashingEnabled,
       interpolationEnabled,
       tau,
@@ -301,6 +311,7 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
         return;
       }
       applyStepInputs(state, nextInputs ?? {
+        diagnosticsEnabled,
         gravityMagnitude,
         hashingEnabled,
         rotationRadians,

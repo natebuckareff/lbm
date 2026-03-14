@@ -57,6 +57,7 @@ export type SimulationRuntime = {
   accumulatorSeconds: number;
   currentTickHash: bigint;
   currentTickHashHex: string;
+  diagnosticsEnabled: boolean;
   debugPreviousFill: Float32Array;
   debugPreviousFlags: Uint8Array;
   debugPreviousMass: Float32Array;
@@ -77,6 +78,7 @@ export type SimulationState = {
 
 export type SimulationRunInfo = {
   currentTickHashHex: string;
+  diagnosticsEnabled: boolean;
   hashingEnabled: boolean;
   stepCount: number;
 };
