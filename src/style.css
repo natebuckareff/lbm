@@ -167,6 +167,22 @@ body {
   text-align: right;
 }
 
+.recording-status {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid #304255;
+  background: #111c2b;
+  color: #d9e2ec;
+  font-size: 0.68rem;
+}
+
+.recording-status-label {
+  color: #99a9bb;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .side-checkbox {
   display: flex;
   align-items: center;

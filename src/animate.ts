@@ -1,6 +1,6 @@
 import { createSimulation, type FrameBuffer } from "./sim";
 import type { VisualizationMode } from "./sim/render";
-import type { CellDebugInfo } from "./sim/types";
+import type { CellDebugInfo, SimulationRunInfo } from "./sim/types";
 
 export type AnimationBuffer = {
   height: number;
@@ -95,4 +95,16 @@ export const inspectSimulationCell = (
   }
 
   return simulation.inspectCell(x, y);
+};
+
+export const inspectSimulationRun = (
+  buffer: AnimationBuffer,
+): SimulationRunInfo => {
+  ensureSimulation(buffer);
+
+  if (simulation === null) {
+    throw new Error("Expected simulation to be initialized");
+  }
+
+  return simulation.inspectRun();
 };

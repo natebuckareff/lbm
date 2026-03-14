@@ -15,6 +15,7 @@ import {
   CELL_SOLID,
   type CellDebugInfo,
   type CellFlag,
+  type SimulationRunInfo,
   type SimulationState,
 } from "./types";
 
@@ -29,6 +30,7 @@ export type FrameBuffer = {
 
 export type Simulation = {
   inspectCell: (x: number, y: number) => CellDebugInfo | null;
+  inspectRun: () => SimulationRunInfo;
   step: (
     dt: number,
     pixels: Uint8ClampedArray,
@@ -199,6 +201,13 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
   return {
     inspectCell(x, y) {
       return inspectCell(state, x, y);
+    },
+    inspectRun() {
+      return {
+        currentTickHashHex: state.runtime.currentTickHashHex,
+        hashingEnabled: state.runtime.hashingEnabled,
+        stepCount: state.runtime.stepCount,
+      };
     },
     step(dt, pixels, mode, hashingEnabled, interpolationEnabled, tau, gravityMagnitude, rotationRadians) {
       state.runtime.hashingEnabled = hashingEnabled;

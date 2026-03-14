@@ -75,6 +75,12 @@ export type SimulationState = {
   runtime: SimulationRuntime;
 };
 
+export type SimulationRunInfo = {
+  currentTickHashHex: string;
+  hashingEnabled: boolean;
+  stepCount: number;
+};
+
 export type PhaseName =
   | "stream"
   | "mass"

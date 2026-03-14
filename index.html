@@ -27,8 +27,19 @@
             <div class="control-group">
               <button class="side-button animation-toggle" type="button">Pause</button>
               <button class="side-button simulation-step" type="button">Step</button>
+              <button class="side-button recording-toggle" type="button">Record</button>
+              <button class="side-button recording-export" type="button" disabled>Export Recording</button>
               <button class="side-button simulation-reset" type="button">Reset Simulation</button>
               <button class="side-button view-reset" type="button">Reset View</button>
+              <label class="side-field">
+                <span class="side-field-label">Recording Name</span>
+                <input
+                  class="side-number recording-name-input"
+                  type="text"
+                  placeholder="Optional"
+                >
+              </label>
+              <div class="recording-status"></div>
               <label class="side-field">
                 <span class="side-field-label">Grid Width</span>
                 <input

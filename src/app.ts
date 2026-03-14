@@ -1,9 +1,16 @@
 import {
   animate,
   inspectSimulationCell,
+  inspectSimulationRun,
   resetSimulation,
   stepAnimation,
 } from "./animate";
+import {
+  buildRecording,
+  createRecorderState,
+  nextRecordedActionPosition,
+  type RecordedSimulationAction,
+} from "./recording";
 import {
   CHUNK_SIZE,
   DEFAULT_GRAVITY,
@@ -35,6 +42,10 @@ const animationToggleButton =
   document.querySelector<HTMLButtonElement>(".animation-toggle");
 const simulationStepButton =
   document.querySelector<HTMLButtonElement>(".simulation-step");
+const recordingToggleButton =
+  document.querySelector<HTMLButtonElement>(".recording-toggle");
+const recordingExportButton =
+  document.querySelector<HTMLButtonElement>(".recording-export");
 const simulationResetButton =
   document.querySelector<HTMLButtonElement>(".simulation-reset");
 const viewResetButton =
@@ -57,6 +68,10 @@ const interpolationToggle =
   document.querySelector<HTMLInputElement>(".interpolation-toggle");
 const hashingToggle =
   document.querySelector<HTMLInputElement>(".hashing-toggle");
+const recordingNameInput =
+  document.querySelector<HTMLInputElement>(".recording-name-input");
+const recordingStatus =
+  document.querySelector<HTMLElement>(".recording-status");
 
 if (!appRoot) {
   throw new Error("Expected #app mount element");
@@ -75,6 +90,8 @@ if (
   !mainCanvas ||
   !animationToggleButton ||
   !simulationStepButton ||
+  !recordingToggleButton ||
+  !recordingExportButton ||
   !simulationResetButton ||
   !viewResetButton ||
   !gridWidthInput ||
@@ -88,7 +105,9 @@ if (
   !rotationValue ||
   !chunkGridToggle ||
   !interpolationToggle ||
-  !hashingToggle
+  !hashingToggle ||
+  !recordingNameInput ||
+  !recordingStatus
 ) {
   throw new Error("Expected app layout elements in index.html");
 }
@@ -135,6 +154,59 @@ let isInterpolationEnabled = false;
 let isHashingEnabled = false;
 let hoveredCellX = -1;
 let hoveredCellY = -1;
+const recorder = createRecorderState();
+
+const getRunInfo = () => inspectSimulationRun(animationBuffer);
+
+const getRecordedHash = () => {
+  const runInfo = getRunInfo();
+  return runInfo.hashingEnabled && runInfo.stepCount > 0
+    ? runInfo.currentTickHashHex
+    : null;
+};
+
+const getLastRecordedAction = () => recorder.actions.at(-1) ?? null;
+
+const pushRecordedAction = (
+  createAction: (tick: number, seq: number, hash: string | null) => RecordedSimulationAction,
+) => {
+  if (!recorder.isRecording) {
+    return;
+  }
+
+  const runInfo = getRunInfo();
+  const seq = nextRecordedActionPosition(recorder, runInfo.stepCount);
+  recorder.actions.push(createAction(runInfo.stepCount, seq, getRecordedHash()));
+  updateRecordingUi();
+};
+
+const updateRecordingUi = () => {
+  recordingToggleButton.textContent = recorder.isRecording ? "Stop" : "Record";
+  recordingExportButton.disabled = recorder.isRecording || recorder.actions.length === 0;
+  simulationResetButton.disabled = recorder.isRecording;
+  gridWidthInput.disabled = recorder.isRecording;
+  gridHeightInput.disabled = recorder.isRecording;
+
+  const stateLabel = recorder.isRecording
+    ? "recording"
+    : recorder.actions.length > 0
+    ? "stopped"
+    : "idle";
+  const currentRecordedTick = recorder.isRecording
+    ? getRunInfo().stepCount
+    : getLastRecordedAction()?.tick ?? null;
+  const currentRecordedHash = recorder.isRecording
+    ? getRecordedHash()
+    : getLastRecordedAction()?.hash ?? null;
+
+  recordingStatus.innerHTML = `
+    <div><span class="recording-status-label">Recorder</span> ${stateLabel}</div>
+    <div><span class="recording-status-label">Name</span> ${recorder.name ?? "unnamed"}</div>
+    <div><span class="recording-status-label">Actions</span> ${recorder.actions.length}</div>
+    <div><span class="recording-status-label">Tick</span> ${currentRecordedTick ?? "n/a"}</div>
+    <div><span class="recording-status-label">Hash</span> ${currentRecordedHash ?? "n/a"}</div>
+  `;
+};
 
 const setCanvasDimensions = (width: number, height: number) => {
   mainCanvas.width = width;
@@ -336,6 +408,7 @@ const renderCurrentFrame = (dt: number) => {
   }
 
   updateInspector();
+  updateRecordingUi();
 };
 
 const applyPendingGridSize = () => {
@@ -367,6 +440,7 @@ const stepCurrentFrame = () => {
   }
 
   updateInspector();
+  updateRecordingUi();
 };
 
 let isAnimationRunning = true;
@@ -533,6 +607,42 @@ animationToggleButton.addEventListener("click", () => {
   animationToggleButton.textContent = isAnimationRunning ? "Pause" : "Resume";
 });
 
+recordingToggleButton.addEventListener("click", () => {
+  if (recorder.isRecording) {
+    recorder.isRecording = false;
+    updateRecordingUi();
+    return;
+  }
+
+  const name = recordingNameInput.value.trim();
+  recorder.actions = [];
+  recorder.isRecording = true;
+  recorder.name = name.length > 0 ? name : null;
+  recorder.lastActionTick = null;
+  recorder.nextSeq = 0;
+
+  const runInfo = getRunInfo();
+  const seq = nextRecordedActionPosition(recorder, runInfo.stepCount);
+  recorder.actions.push({
+    tick: runInfo.stepCount,
+    seq,
+    hash: getRecordedHash(),
+    type: "start_sim",
+    name: recorder.name,
+    width: gridWidth,
+    height: gridHeight,
+    tau,
+    gravityMagnitude,
+    rotationDegrees,
+    hashingEnabled: isHashingEnabled,
+  });
+  updateRecordingUi();
+});
+
+recordingExportButton.addEventListener("click", () => {
+  console.log(JSON.stringify(buildRecording(recorder), null, 2));
+});
+
 simulationStepButton.addEventListener("click", () => {
   if (isAnimationRunning) {
     isAnimationRunning = false;
@@ -578,6 +688,13 @@ tauSlider.addEventListener("input", () => {
 
   tau = Math.max(MIN_TAU, Math.min(MAX_TAU, nextTau));
   tauValue.textContent = formatTau(tau);
+  pushRecordedAction((tick, seq, hash) => ({
+    tick,
+    seq,
+    hash,
+    type: "set_tau",
+    value: tau,
+  }));
   renderCurrentFrame(0);
 });
 
@@ -596,6 +713,13 @@ gravitySlider.addEventListener("input", () => {
 
   gravityMagnitude = Math.max(MIN_GRAVITY, Math.min(MAX_GRAVITY, nextGravity));
   gravityValue.textContent = formatGravity(gravityMagnitude);
+  pushRecordedAction((tick, seq, hash) => ({
+    tick,
+    seq,
+    hash,
+    type: "set_gravity",
+    value: gravityMagnitude,
+  }));
   renderCurrentFrame(0);
 });
 
@@ -624,6 +748,13 @@ rotationSlider.addEventListener("input", () => {
     renderCanvasTransform();
   }
 
+  pushRecordedAction((tick, seq, hash) => ({
+    tick,
+    seq,
+    hash,
+    type: "set_rotation_degrees",
+    value: rotationDegrees,
+  }));
   renderCurrentFrame(0);
 });
 
@@ -822,5 +953,6 @@ setCollapsed(false);
 setInspectorHeight(COLLAPSED_INSPECTOR_HEIGHT);
 resetCanvasView();
 updateInspector();
+updateRecordingUi();
 renderCurrentFrame(0);
 requestAnimationFrame(frame);
