@@ -10,7 +10,9 @@ import {
   buildRecording,
   createRecorderState,
   nextRecordedActionPosition,
+  parseSimulationRecording,
   type RecordedSimulationAction,
+  type SimulationRecording,
 } from "./recording";
 import {
   CHUNK_SIZE,
@@ -47,6 +49,10 @@ const recordingToggleButton =
   document.querySelector<HTMLButtonElement>(".recording-toggle");
 const recordingExportButton =
   document.querySelector<HTMLButtonElement>(".recording-export");
+const replayOpenButton =
+  document.querySelector<HTMLButtonElement>(".replay-open");
+const replayStopButton =
+  document.querySelector<HTMLButtonElement>(".replay-stop");
 const simulationResetButton =
   document.querySelector<HTMLButtonElement>(".simulation-reset");
 const viewResetButton =
@@ -73,6 +79,18 @@ const recordingNameInput =
   document.querySelector<HTMLInputElement>(".recording-name-input");
 const recordingStatus =
   document.querySelector<HTMLElement>(".recording-status");
+const replayStatus =
+  document.querySelector<HTMLElement>(".replay-status");
+const replayModal =
+  document.querySelector<HTMLElement>(".replay-modal");
+const replayInput =
+  document.querySelector<HTMLTextAreaElement>(".replay-input");
+const replayError =
+  document.querySelector<HTMLElement>(".replay-error");
+const replayLoadButton =
+  document.querySelector<HTMLButtonElement>(".replay-load");
+const replayCancelButton =
+  document.querySelector<HTMLButtonElement>(".replay-cancel");
 
 if (!appRoot) {
   throw new Error("Expected #app mount element");
@@ -93,6 +111,8 @@ if (
   !simulationStepButton ||
   !recordingToggleButton ||
   !recordingExportButton ||
+  !replayOpenButton ||
+  !replayStopButton ||
   !simulationResetButton ||
   !viewResetButton ||
   !gridWidthInput ||
@@ -108,7 +128,13 @@ if (
   !interpolationToggle ||
   !hashingToggle ||
   !recordingNameInput ||
-  !recordingStatus
+  !recordingStatus ||
+  !replayStatus ||
+  !replayModal ||
+  !replayInput ||
+  !replayError ||
+  !replayLoadButton ||
+  !replayCancelButton
 ) {
   throw new Error("Expected app layout elements in index.html");
 }
@@ -156,6 +182,29 @@ let isHashingEnabled = false;
 let hoveredCellX = -1;
 let hoveredCellY = -1;
 const recorder = createRecorderState();
+type ControlChangeSource = "user" | "replay" | "load";
+type ReplayMismatch = {
+  actualHash: string | null;
+  context: string;
+  expectedHash: string;
+  tick: number;
+};
+type ReplayState = {
+  error: string | null;
+  isCompleted: boolean;
+  isDiverged: boolean;
+  mismatch: ReplayMismatch | null;
+  nextActionIndex: number;
+  recording: SimulationRecording | null;
+};
+const replay: ReplayState = {
+  error: null,
+  isCompleted: false,
+  isDiverged: false,
+  mismatch: null,
+  nextActionIndex: 0,
+  recording: null,
+};
 
 const getRunInfo = () => inspectSimulationRun(animationBuffer);
 
@@ -166,7 +215,33 @@ const getRecordedHash = () => {
     : null;
 };
 
+const getCurrentStepInputs = () => ({
+  gravityMagnitude,
+  hashingEnabled: isHashingEnabled,
+  rotationRadians: (rotationDegrees * Math.PI) / 180,
+  tau,
+});
+
 const getLastRecordedAction = () => recorder.actions.at(-1) ?? null;
+const getIsReplayLoaded = () => replay.recording !== null;
+const getNextReplayAction = () => replay.recording?.actions[replay.nextActionIndex] ?? null;
+
+const updateControlLocks = () => {
+  const replayLoaded = getIsReplayLoaded();
+  recordingToggleButton.disabled = replayLoaded;
+  recordingExportButton.disabled =
+    replayLoaded || recorder.isRecording || recorder.actions.length === 0;
+  replayOpenButton.disabled = recorder.isRecording || replayLoaded;
+  replayStopButton.disabled = !replayLoaded;
+  simulationResetButton.disabled = recorder.isRecording || replayLoaded;
+  gridWidthInput.disabled = recorder.isRecording || replayLoaded;
+  gridHeightInput.disabled = recorder.isRecording || replayLoaded;
+  tauSlider.disabled = replayLoaded;
+  gravitySlider.disabled = replayLoaded;
+  rotationSlider.disabled = replayLoaded;
+  hashingToggle.disabled = replayLoaded;
+  recordingNameInput.disabled = recorder.isRecording || replayLoaded;
+};
 
 const pushRecordedAction = (
   createAction: (tick: number, seq: number, hash: string | null) => RecordedSimulationAction,
@@ -184,16 +259,25 @@ const pushRecordedAction = (
   updateRecordingUi();
 };
 
+const setReplayModalOpen = (open: boolean) => {
+  replayModal.classList.toggle("is-hidden", !open);
+  replayModal.setAttribute("aria-hidden", String(!open));
+  if (!open) {
+    replayError.textContent = "";
+    return;
+  }
+
+  replayInput.focus();
+  replayInput.select();
+};
+
 const updateRecordingUi = () => {
   const recordingLabel = recordingToggleButton.querySelector<HTMLElement>(".side-button-label");
 
   if (recordingLabel) {
     recordingLabel.textContent = recorder.isRecording ? "Stop" : "Record";
   }
-  recordingExportButton.disabled = recorder.isRecording || recorder.actions.length === 0;
-  simulationResetButton.disabled = recorder.isRecording;
-  gridWidthInput.disabled = recorder.isRecording;
-  gridHeightInput.disabled = recorder.isRecording;
+  updateControlLocks();
 
   const stateLabel = recorder.isRecording
     ? "recording"
@@ -216,6 +300,33 @@ const updateRecordingUi = () => {
   `;
 };
 
+const updateReplayUi = () => {
+  updateControlLocks();
+
+  const stateLabel = !getIsReplayLoaded()
+    ? "idle"
+    : replay.isDiverged
+    ? "diverged"
+    : replay.isCompleted
+    ? "completed"
+    : "running";
+  const currentTick = getIsReplayLoaded() ? getRunInfo().stepCount : null;
+  const nextActionTick = getNextReplayAction()?.tick ?? "done";
+  const mismatch = replay.mismatch;
+
+  replayStatus.innerHTML = `
+    <div><span class="replay-status-label">Replay</span> ${stateLabel}</div>
+    <div><span class="replay-status-label">Name</span> ${replay.recording?.name ?? "n/a"}</div>
+    <div><span class="replay-status-label">Actions</span> ${replay.recording?.actions.length ?? 0}</div>
+    <div><span class="replay-status-label">Tick</span> ${currentTick ?? "n/a"}</div>
+    <div><span class="replay-status-label">Next Tick</span> ${nextActionTick}</div>
+    <div><span class="replay-status-label">End Hash</span> ${replay.recording?.endHash ?? "n/a"}</div>
+    <div><span class="replay-status-label">Mismatch</span> ${
+      mismatch ? `${mismatch.context} @ ${mismatch.tick}` : "none"
+    }</div>
+  `;
+};
+
 const updateAnimationToggleUi = () => {
   const animationLabel =
     animationToggleButton.querySelector<HTMLElement>(".side-button-label");
@@ -225,6 +336,207 @@ const updateAnimationToggleUi = () => {
   if (animationLabel) {
     animationLabel.textContent = isAnimationRunning ? "Pause" : "Resume";
   }
+};
+
+const applyHashingEnabled = (nextValue: boolean, shouldRender: boolean) => {
+  isHashingEnabled = nextValue;
+  hashingToggle.checked = nextValue;
+
+  if (shouldRender) {
+    renderCurrentFrame(0);
+  }
+};
+
+const applyTau = (
+  nextValue: number,
+  source: ControlChangeSource,
+  shouldRender: boolean,
+) => {
+  tau = Math.max(MIN_TAU, Math.min(MAX_TAU, nextValue));
+  tauSlider.value = String(tau);
+  tauValue.textContent = formatTau(tau);
+
+  if (source === "user") {
+    pushRecordedAction((tick, seq, hash) => ({
+      tick,
+      seq,
+      hash,
+      type: "set_tau",
+      value: tau,
+    }));
+  }
+
+  if (shouldRender) {
+    renderCurrentFrame(0);
+  }
+};
+
+const applyGravity = (
+  nextValue: number,
+  source: ControlChangeSource,
+  shouldRender: boolean,
+) => {
+  gravityMagnitude = Math.max(MIN_GRAVITY, Math.min(MAX_GRAVITY, nextValue));
+  gravitySlider.value = String(gravityMagnitude);
+  gravityValue.textContent = formatGravity(gravityMagnitude);
+
+  if (source === "user") {
+    pushRecordedAction((tick, seq, hash) => ({
+      tick,
+      seq,
+      hash,
+      type: "set_gravity",
+      value: gravityMagnitude,
+    }));
+  }
+
+  if (shouldRender) {
+    renderCurrentFrame(0);
+  }
+};
+
+const applyRotationDegrees = (
+  nextValue: number,
+  source: ControlChangeSource,
+  shouldRender: boolean,
+) => {
+  rotationDegrees = Math.max(
+    MIN_ROTATION_DEGREES,
+    Math.min(MAX_ROTATION_DEGREES, nextValue),
+  );
+  rotationSlider.value = String(rotationDegrees);
+  rotationValue.textContent = formatRotation(rotationDegrees);
+
+  if (isCanvasAutoFit) {
+    resetCanvasView();
+  } else {
+    renderCanvasTransform();
+  }
+
+  if (source === "user") {
+    pushRecordedAction((tick, seq, hash) => ({
+      tick,
+      seq,
+      hash,
+      type: "set_rotation_degrees",
+      value: rotationDegrees,
+    }));
+  }
+
+  if (shouldRender) {
+    renderCurrentFrame(0);
+  }
+};
+
+const clearReplayState = () => {
+  replay.error = null;
+  replay.isCompleted = false;
+  replay.isDiverged = false;
+  replay.mismatch = null;
+  replay.nextActionIndex = 0;
+  replay.recording = null;
+};
+
+const setReplayMismatch = (
+  tick: number,
+  expectedHash: string,
+  actualHash: string | null,
+  context: string,
+) => {
+  if (replay.isDiverged) {
+    return;
+  }
+
+  replay.isDiverged = true;
+  replay.mismatch = {
+    actualHash,
+    context,
+    expectedHash,
+    tick,
+  };
+};
+
+const verifyReplayHash = (
+  expectedHash: string | null,
+  tick: number,
+  context: string,
+) => {
+  if (!expectedHash) {
+    return;
+  }
+
+  const actualHash = getRecordedHash();
+  if (actualHash !== expectedHash) {
+    setReplayMismatch(tick, expectedHash, actualHash, context);
+  }
+};
+
+const applyReplayActionsForCurrentTick = () => {
+  if (!replay.recording || replay.isCompleted) {
+    return;
+  }
+
+  const currentTick = getRunInfo().stepCount;
+  while (true) {
+    const action = getNextReplayAction();
+    if (!action || action.tick !== currentTick) {
+      break;
+    }
+
+    verifyReplayHash(action.hash, currentTick, action.type);
+
+    if (action.type === "set_tau") {
+      applyTau(action.value, "replay", false);
+    } else if (action.type === "set_gravity") {
+      applyGravity(action.value, "replay", false);
+    } else if (action.type === "set_rotation_degrees") {
+      applyRotationDegrees(action.value, "replay", false);
+    }
+
+    replay.nextActionIndex += 1;
+  }
+};
+
+const completeReplayIfNeeded = () => {
+  if (!replay.recording || replay.isCompleted) {
+    return;
+  }
+
+  const currentTick = getRunInfo().stepCount;
+  if (replay.recording.endTick !== null && currentTick >= replay.recording.endTick) {
+    verifyReplayHash(replay.recording.endHash, replay.recording.endTick, "end_hash");
+    replay.isCompleted = true;
+    isAnimationRunning = false;
+    updateAnimationToggleUi();
+  }
+};
+
+const loadReplayRecording = (recording: SimulationRecording) => {
+  clearReplayState();
+  replay.recording = recording;
+
+  const startAction = recording.actions[0];
+  if (startAction.type !== "start_sim") {
+    throw new Error("Expected start_sim as first replay action");
+  }
+
+  gridWidthInput.value = String(startAction.width);
+  gridHeightInput.value = String(startAction.height);
+  recreateFrameBuffer(startAction.width, startAction.height);
+  resetSimulation();
+  applyHashingEnabled(startAction.hashingEnabled, false);
+  applyTau(startAction.tau, "load", false);
+  applyGravity(startAction.gravityMagnitude, "load", false);
+  applyRotationDegrees(startAction.rotationDegrees, "load", false);
+  replay.nextActionIndex = 1;
+  isCanvasAutoFit = true;
+  resetCanvasView();
+  renderCurrentFrame(0);
+  isAnimationRunning = true;
+  updateAnimationToggleUi();
+  completeReplayIfNeeded();
+  updateReplayUi();
+  updateRecordingUi();
 };
 
 const setCanvasDimensions = (width: number, height: number) => {
@@ -413,6 +725,16 @@ const renderChunkGrid = () => {
 
 const renderCurrentFrame = (dt: number) => {
   animate(animationBuffer, dt, {
+    afterFixedStep: () => {
+      completeReplayIfNeeded();
+    },
+    beforeFixedStep: () => {
+      if (replay.isCompleted) {
+        return false;
+      }
+      applyReplayActionsForCurrentTick();
+      return replay.isCompleted ? false : getCurrentStepInputs();
+    },
     gravityMagnitude,
     hashingEnabled: isHashingEnabled,
     interpolationEnabled: isInterpolationEnabled,
@@ -428,6 +750,7 @@ const renderCurrentFrame = (dt: number) => {
 
   updateInspector();
   updateRecordingUi();
+  updateReplayUi();
 };
 
 const applyPendingGridSize = () => {
@@ -444,7 +767,16 @@ const applyPendingGridSize = () => {
 };
 
 const stepCurrentFrame = () => {
+  applyReplayActionsForCurrentTick();
+  if (replay.isCompleted) {
+    renderCurrentFrame(0);
+    return;
+  }
   stepAnimation(animationBuffer, {
+    afterFixedStep: () => {
+      completeReplayIfNeeded();
+    },
+    beforeFixedStep: () => (replay.isCompleted ? false : getCurrentStepInputs()),
     gravityMagnitude,
     hashingEnabled: isHashingEnabled,
     interpolationEnabled: isInterpolationEnabled,
@@ -460,6 +792,7 @@ const stepCurrentFrame = () => {
 
   updateInspector();
   updateRecordingUi();
+  updateReplayUi();
 };
 
 let isAnimationRunning = true;
@@ -667,6 +1000,33 @@ recordingExportButton.addEventListener("click", () => {
   console.log(JSON.stringify(buildRecording(recorder), null, 2));
 });
 
+replayOpenButton.addEventListener("click", () => {
+  replayError.textContent = "";
+  replayInput.value = "";
+  setReplayModalOpen(true);
+});
+
+replayCancelButton.addEventListener("click", () => {
+  setReplayModalOpen(false);
+});
+
+replayLoadButton.addEventListener("click", () => {
+  const parsed = parseSimulationRecording(replayInput.value);
+  if (!parsed.recording) {
+    replayError.textContent = parsed.error;
+    return;
+  }
+
+  setReplayModalOpen(false);
+  loadReplayRecording(parsed.recording);
+});
+
+replayStopButton.addEventListener("click", () => {
+  clearReplayState();
+  updateReplayUi();
+  updateRecordingUi();
+});
+
 simulationStepButton.addEventListener("click", () => {
   if (isAnimationRunning) {
     isAnimationRunning = false;
@@ -710,16 +1070,7 @@ tauSlider.addEventListener("input", () => {
     return;
   }
 
-  tau = Math.max(MIN_TAU, Math.min(MAX_TAU, nextTau));
-  tauValue.textContent = formatTau(tau);
-  pushRecordedAction((tick, seq, hash) => ({
-    tick,
-    seq,
-    hash,
-    type: "set_tau",
-    value: tau,
-  }));
-  renderCurrentFrame(0);
+  applyTau(nextTau, "user", true);
 });
 
 gravitySlider.min = String(MIN_GRAVITY);
@@ -735,16 +1086,7 @@ gravitySlider.addEventListener("input", () => {
     return;
   }
 
-  gravityMagnitude = Math.max(MIN_GRAVITY, Math.min(MAX_GRAVITY, nextGravity));
-  gravityValue.textContent = formatGravity(gravityMagnitude);
-  pushRecordedAction((tick, seq, hash) => ({
-    tick,
-    seq,
-    hash,
-    type: "set_gravity",
-    value: gravityMagnitude,
-  }));
-  renderCurrentFrame(0);
+  applyGravity(nextGravity, "user", true);
 });
 
 rotationSlider.min = String(MIN_ROTATION_DEGREES);
@@ -760,26 +1102,7 @@ rotationSlider.addEventListener("input", () => {
     return;
   }
 
-  rotationDegrees = Math.max(
-    MIN_ROTATION_DEGREES,
-    Math.min(MAX_ROTATION_DEGREES, nextRotation),
-  );
-  rotationValue.textContent = formatRotation(rotationDegrees);
-
-  if (isCanvasAutoFit) {
-    resetCanvasView();
-  } else {
-    renderCanvasTransform();
-  }
-
-  pushRecordedAction((tick, seq, hash) => ({
-    tick,
-    seq,
-    hash,
-    type: "set_rotation_degrees",
-    value: rotationDegrees,
-  }));
-  renderCurrentFrame(0);
+  applyRotationDegrees(nextRotation, "user", true);
 });
 
 chunkGridToggle.addEventListener("change", () => {
@@ -793,8 +1116,7 @@ interpolationToggle.addEventListener("change", () => {
 });
 
 hashingToggle.addEventListener("change", () => {
-  isHashingEnabled = hashingToggle.checked;
-  renderCurrentFrame(0);
+  applyHashingEnabled(hashingToggle.checked, true);
 });
 
 const COLLAPSED_INSPECTOR_HEIGHT = 24;
@@ -978,6 +1300,7 @@ setInspectorHeight(COLLAPSED_INSPECTOR_HEIGHT);
 resetCanvasView();
 updateInspector();
 updateRecordingUi();
+updateReplayUi();
 updateAnimationToggleUi();
 renderCurrentFrame(0);
 requestAnimationFrame(frame);

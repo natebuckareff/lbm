@@ -212,7 +212,8 @@ body {
   text-align: right;
 }
 
-.recording-status {
+.recording-status,
+.replay-status {
   display: grid;
   gap: 0.2rem;
   padding: 0.35rem 0.45rem;
@@ -222,10 +223,76 @@ body {
   font-size: 0.68rem;
 }
 
-.recording-status-label {
+.recording-status-label,
+.replay-status-label {
   color: #99a9bb;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(7, 11, 18, 0.6);
+  backdrop-filter: blur(2px);
+  z-index: 20;
+}
+
+.modal-overlay.is-hidden {
+  display: none;
+}
+
+.modal-dialog {
+  width: min(720px, 100%);
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid #304255;
+  background: #0d1520;
+  color: #d9e2ec;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.28);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.modal-textarea {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  border: 1px solid #304255;
+  background: #111c2b;
+  color: #d9e2ec;
+  padding: 0.5rem;
+  font: inherit;
+  font-size: 0.72rem;
+}
+
+.modal-textarea:focus-visible {
+  outline: 1px solid #7fb3ff;
+  outline-offset: 1px;
+}
+
+.modal-error {
+  min-height: 1rem;
+  color: #f6a3a3;
+  font-size: 0.7rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.modal-actions .side-button {
+  width: auto;
 }
 
 .side-checkbox {

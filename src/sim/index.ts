@@ -40,6 +40,16 @@ export type Simulation = {
     tau: number,
     gravityMagnitude: number,
     rotationRadians: number,
+    beforeFixedStep?: () =>
+      | false
+      | {
+          gravityMagnitude: number;
+          hashingEnabled: boolean;
+          rotationRadians: number;
+          tau: number;
+        }
+      | void,
+    afterFixedStep?: () => void,
   ) => void;
   stepOnce: (
     pixels: Uint8ClampedArray,
@@ -49,6 +59,16 @@ export type Simulation = {
     tau: number,
     gravityMagnitude: number,
     rotationRadians: number,
+    beforeFixedStep?: () =>
+      | false
+      | {
+          gravityMagnitude: number;
+          hashingEnabled: boolean;
+          rotationRadians: number;
+          tau: number;
+        }
+      | void,
+    afterFixedStep?: () => void,
   ) => void;
 };
 
@@ -81,6 +101,21 @@ const advanceOneFixedStep = (state: SimulationState) => {
     state.runtime.currentTickHash = nextHash;
     state.runtime.currentTickHashHex = formatHashHex(nextHash);
   }
+};
+
+const applyStepInputs = (
+  state: SimulationState,
+  inputs: {
+    gravityMagnitude: number;
+    hashingEnabled: boolean;
+    rotationRadians: number;
+    tau: number;
+  },
+) => {
+  state.runtime.hashingEnabled = inputs.hashingEnabled;
+  state.runtime.tau = inputs.tau;
+  state.runtime.gravityX = inputs.gravityMagnitude * Math.sin(inputs.rotationRadians);
+  state.runtime.gravityY = inputs.gravityMagnitude * Math.cos(inputs.rotationRadians);
 };
 
 const renderSimulation = (
@@ -209,11 +244,18 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
         stepCount: state.runtime.stepCount,
       };
     },
-    step(dt, pixels, mode, hashingEnabled, interpolationEnabled, tau, gravityMagnitude, rotationRadians) {
-      state.runtime.hashingEnabled = hashingEnabled;
-      state.runtime.tau = tau;
-      state.runtime.gravityX = gravityMagnitude * Math.sin(rotationRadians);
-      state.runtime.gravityY = gravityMagnitude * Math.cos(rotationRadians);
+    step(
+      dt,
+      pixels,
+      mode,
+      hashingEnabled,
+      interpolationEnabled,
+      tau,
+      gravityMagnitude,
+      rotationRadians,
+      beforeFixedStep,
+      afterFixedStep,
+    ) {
       state.runtime.accumulatorSeconds += Math.min(
         Math.max(dt, 0),
         MAX_FRAME_TIME_SECONDS,
@@ -224,19 +266,48 @@ export const createSimulation = (buffer: FrameBuffer): Simulation => {
         state.runtime.accumulatorSeconds >= SIMULATION_DT_SECONDS &&
         steps < MAX_STEPS_PER_FRAME
       ) {
+        const nextInputs = beforeFixedStep?.();
+        if (nextInputs === false) {
+          break;
+        }
+        applyStepInputs(state, nextInputs ?? {
+          gravityMagnitude,
+          hashingEnabled,
+          rotationRadians,
+          tau,
+        });
         advanceOneFixedStep(state);
+        afterFixedStep?.();
         state.runtime.accumulatorSeconds -= SIMULATION_DT_SECONDS;
         steps += 1;
       }
 
       renderSimulation(state, pixels, mode, interpolationEnabled);
     },
-    stepOnce(pixels, mode, hashingEnabled, interpolationEnabled, tau, gravityMagnitude, rotationRadians) {
-      state.runtime.hashingEnabled = hashingEnabled;
-      state.runtime.tau = tau;
-      state.runtime.gravityX = gravityMagnitude * Math.sin(rotationRadians);
-      state.runtime.gravityY = gravityMagnitude * Math.cos(rotationRadians);
+    stepOnce(
+      pixels,
+      mode,
+      hashingEnabled,
+      interpolationEnabled,
+      tau,
+      gravityMagnitude,
+      rotationRadians,
+      beforeFixedStep,
+      afterFixedStep,
+    ) {
+      const nextInputs = beforeFixedStep?.();
+      if (nextInputs === false) {
+        renderSimulation(state, pixels, mode, interpolationEnabled);
+        return;
+      }
+      applyStepInputs(state, nextInputs ?? {
+        gravityMagnitude,
+        hashingEnabled,
+        rotationRadians,
+        tau,
+      });
       advanceOneFixedStep(state);
+      afterFixedStep?.();
       renderSimulation(state, pixels, mode, interpolationEnabled);
     },
   };

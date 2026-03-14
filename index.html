@@ -69,6 +69,22 @@
                 </span>
                 <span class="side-button-label">Export Recording</span>
               </button>
+              <button class="side-button replay-open" type="button">
+                <span class="side-button-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" focusable="false">
+                    <path d="M4 3v10l6-5-6-5zM11 3h1v10h-1z" fill="currentColor"></path>
+                  </svg>
+                </span>
+                <span class="side-button-label">Re-play</span>
+              </button>
+              <button class="side-button replay-stop" type="button" disabled>
+                <span class="side-button-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" focusable="false">
+                    <path d="M4 4h8v8H4z" fill="currentColor"></path>
+                  </svg>
+                </span>
+                <span class="side-button-label">Stop Re-play</span>
+              </button>
               <button class="side-button simulation-reset" type="button">
                 <span class="side-button-icon" aria-hidden="true">
                   <svg viewBox="0 0 16 16" focusable="false">
@@ -104,6 +120,7 @@
                 >
               </label>
               <div class="recording-status"></div>
+              <div class="replay-status"></div>
               <label class="side-field">
                 <span class="side-field-label">Grid Width</span>
                 <input
@@ -203,6 +220,26 @@
           </section>
         </section>
       </main>
+    </div>
+    <div class="modal-overlay replay-modal is-hidden" aria-hidden="true">
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="replay-modal-title">
+        <div class="modal-header">
+          <h2 id="replay-modal-title">Load Recording</h2>
+        </div>
+        <label class="side-field">
+          <span class="side-field-label">Recording JSON</span>
+          <textarea class="modal-textarea replay-input" spellcheck="false"></textarea>
+        </label>
+        <div class="modal-error replay-error"></div>
+        <div class="modal-actions">
+          <button class="side-button replay-load" type="button">
+            <span class="side-button-label">Load Recording</span>
+          </button>
+          <button class="side-button replay-cancel" type="button">
+            <span class="side-button-label">Cancel</span>
+          </button>
+        </div>
+      </div>
     </div>
     <script type="module" src="./src/app.ts"></script>
   </body>

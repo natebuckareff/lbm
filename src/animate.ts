@@ -9,6 +9,16 @@ export type AnimationBuffer = {
 };
 
 export type AnimationOptions = {
+  afterFixedStep?: () => void;
+  beforeFixedStep?: () =>
+    | false
+    | {
+        gravityMagnitude: number;
+        hashingEnabled: boolean;
+        rotationRadians: number;
+        tau: number;
+      }
+    | void;
   gravityMagnitude: number;
   hashingEnabled: boolean;
   interpolationEnabled: boolean;
@@ -59,6 +69,8 @@ export const animate = (
     options.tau,
     options.gravityMagnitude,
     options.rotationRadians,
+    options.beforeFixedStep,
+    options.afterFixedStep,
   );
 };
 
@@ -80,6 +92,8 @@ export const stepAnimation = (
     options.tau,
     options.gravityMagnitude,
     options.rotationRadians,
+    options.beforeFixedStep,
+    options.afterFixedStep,
   );
 };
 
