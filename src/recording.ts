@@ -36,24 +36,33 @@ export type RecordedSimulationAction =
 
 export type SimulationRecording = {
   version: 1;
+  endHash: string | null;
   name: string | null;
+  endTick: number | null;
+  startTick: number | null;
   actions: RecordedSimulationAction[];
 };
 
 export type RecorderState = {
   actions: RecordedSimulationAction[];
+  endHash: string | null;
+  endTick: number | null;
   isRecording: boolean;
   lastActionTick: number | null;
   name: string | null;
   nextSeq: number;
+  startTick: number | null;
 };
 
 export const createRecorderState = (): RecorderState => ({
   actions: [],
+  endHash: null,
+  endTick: null,
   isRecording: false,
   lastActionTick: null,
   name: null,
   nextSeq: 0,
+  startTick: null,
 });
 
 export const nextRecordedActionPosition = (
@@ -101,6 +110,9 @@ export const buildRecording = (
   recorder: RecorderState,
 ): SimulationRecording => ({
   version: 1,
+  endHash: recorder.endHash,
   name: recorder.name,
+  endTick: recorder.endTick,
+  startTick: recorder.startTick,
   actions: recorder.actions,
 });

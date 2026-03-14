@@ -198,10 +198,10 @@ const updateRecordingUi = () => {
     : "idle";
   const currentRecordedTick = recorder.isRecording
     ? getRunInfo().stepCount
-    : getLastRecordedAction()?.tick ?? null;
+    : recorder.endTick ?? recorder.startTick ?? getLastRecordedAction()?.tick ?? null;
   const currentRecordedHash = recorder.isRecording
     ? getRecordedHash()
-    : getLastRecordedAction()?.hash ?? null;
+    : recorder.endHash ?? getLastRecordedAction()?.hash ?? null;
 
   recordingStatus.innerHTML = `
     <div><span class="recording-status-label">Recorder</span> ${stateLabel}</div>
@@ -614,18 +614,23 @@ animationToggleButton.addEventListener("click", () => {
 recordingToggleButton.addEventListener("click", () => {
   if (recorder.isRecording) {
     recorder.isRecording = false;
+    recorder.endTick = getRunInfo().stepCount;
+    recorder.endHash = getRecordedHash();
     updateRecordingUi();
     return;
   }
 
   const name = recordingNameInput.value.trim();
   recorder.actions = [];
+  recorder.endHash = null;
+  recorder.endTick = null;
   recorder.isRecording = true;
   recorder.name = name.length > 0 ? name : null;
   recorder.lastActionTick = null;
   recorder.nextSeq = 0;
 
   const runInfo = getRunInfo();
+  recorder.startTick = runInfo.stepCount;
   const seq = nextRecordedActionPosition(recorder, runInfo.stepCount);
   appendOrCoalesceRecordedAction(recorder, {
     tick: runInfo.stepCount,
