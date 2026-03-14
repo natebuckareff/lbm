@@ -241,6 +241,26 @@
         </div>
       </div>
     </div>
+    <div class="modal-overlay export-modal is-hidden" aria-hidden="true">
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+        <div class="modal-header">
+          <h2 id="export-modal-title">Export Recording</h2>
+        </div>
+        <label class="side-field">
+          <span class="side-field-label">Recording JSON</span>
+          <textarea class="modal-textarea export-output" spellcheck="false" readonly></textarea>
+        </label>
+        <div class="modal-error export-status"></div>
+        <div class="modal-actions">
+          <button class="side-button export-copy" type="button">
+            <span class="side-button-label">Copy to Clipboard</span>
+          </button>
+          <button class="side-button export-close" type="button">
+            <span class="side-button-label">Close</span>
+          </button>
+        </div>
+      </div>
+    </div>
     <script type="module" src="./src/app.ts"></script>
   </body>
 </html>

@@ -91,6 +91,16 @@ const replayLoadButton =
   document.querySelector<HTMLButtonElement>(".replay-load");
 const replayCancelButton =
   document.querySelector<HTMLButtonElement>(".replay-cancel");
+const exportModal =
+  document.querySelector<HTMLElement>(".export-modal");
+const exportOutput =
+  document.querySelector<HTMLTextAreaElement>(".export-output");
+const exportStatus =
+  document.querySelector<HTMLElement>(".export-status");
+const exportCopyButton =
+  document.querySelector<HTMLButtonElement>(".export-copy");
+const exportCloseButton =
+  document.querySelector<HTMLButtonElement>(".export-close");
 
 if (!appRoot) {
   throw new Error("Expected #app mount element");
@@ -134,7 +144,12 @@ if (
   !replayInput ||
   !replayError ||
   !replayLoadButton ||
-  !replayCancelButton
+  !replayCancelButton ||
+  !exportModal ||
+  !exportOutput ||
+  !exportStatus ||
+  !exportCopyButton ||
+  !exportCloseButton
 ) {
   throw new Error("Expected app layout elements in index.html");
 }
@@ -269,6 +284,19 @@ const setReplayModalOpen = (open: boolean) => {
 
   replayInput.focus();
   replayInput.select();
+};
+
+const setExportModalOpen = (open: boolean) => {
+  exportModal.classList.toggle("is-hidden", !open);
+  exportModal.setAttribute("aria-hidden", String(!open));
+
+  if (!open) {
+    exportStatus.textContent = "";
+    return;
+  }
+
+  exportOutput.focus();
+  exportOutput.select();
 };
 
 const updateRecordingUi = () => {
@@ -997,7 +1025,9 @@ recordingToggleButton.addEventListener("click", () => {
 });
 
 recordingExportButton.addEventListener("click", () => {
-  console.log(JSON.stringify(buildRecording(recorder), null, 2));
+  exportStatus.textContent = "";
+  exportOutput.value = JSON.stringify(buildRecording(recorder), null, 2);
+  setExportModalOpen(true);
 });
 
 replayOpenButton.addEventListener("click", () => {
@@ -1025,6 +1055,19 @@ replayStopButton.addEventListener("click", () => {
   clearReplayState();
   updateReplayUi();
   updateRecordingUi();
+});
+
+exportCloseButton.addEventListener("click", () => {
+  setExportModalOpen(false);
+});
+
+exportCopyButton.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(exportOutput.value);
+    exportStatus.textContent = "Copied";
+  } catch {
+    exportStatus.textContent = "Clipboard copy failed";
+  }
 });
 
 simulationStepButton.addEventListener("click", () => {
