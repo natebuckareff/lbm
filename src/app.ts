@@ -1108,7 +1108,9 @@ simulationResetButton.addEventListener("click", () => {
 });
 
 viewResetButton.addEventListener("click", () => {
+  applyRotationDegrees(DEFAULT_ROTATION_DEGREES, "user", false);
   resetCanvasView();
+  renderCurrentFrame(0);
 });
 
 visualizationModeSelect.addEventListener("change", () => {
