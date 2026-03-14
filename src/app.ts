@@ -100,7 +100,8 @@ const MAX_GRID_SIZE = 1024;
 const MIN_CANVAS_SCALE = 0.25;
 const MAX_CANVAS_SCALE = 32;
 const ZOOM_STEP = 0.0015;
-const CANVAS_FIT_HORIZONTAL_PADDING = 32;
+const CANVAS_FIT_PADDING_X = 32;
+const CANVAS_FIT_PADDING_Y = 32;
 
 const context = mainCanvas.getContext("2d");
 
@@ -489,22 +490,32 @@ const centerCanvasInWorkspace = (scale: number) => {
   setCanvasTransform(x, y, scale);
 };
 
-const getCanvasWidthFitScale = () => {
+const getCanvasFitScale = () => {
   const availableWidth = Math.max(
-    workspaceView.clientWidth - CANVAS_FIT_HORIZONTAL_PADDING * 2,
+    workspaceView.clientWidth - CANVAS_FIT_PADDING_X * 2,
+    0,
+  );
+  const availableHeight = Math.max(
+    workspaceView.clientHeight - CANVAS_FIT_PADDING_Y * 2,
     0,
   );
 
-  if (availableWidth <= 0) {
+  if (availableWidth <= 0 || availableHeight <= 0) {
     return MIN_CANVAS_SCALE;
   }
 
-  return clampCanvasScale(availableWidth / gridWidth);
+  const rotatedBounds = getRotatedCanvasBounds(1);
+  const fitScale = Math.min(
+    availableWidth / rotatedBounds.width,
+    availableHeight / rotatedBounds.height,
+  );
+
+  return clampCanvasScale(fitScale);
 };
 
 const resetCanvasView = () => {
   isCanvasAutoFit = true;
-  centerCanvasInWorkspace(getCanvasWidthFitScale());
+  centerCanvasInWorkspace(getCanvasFitScale());
 };
 
 const setCollapsed = (collapsed: boolean) => {
